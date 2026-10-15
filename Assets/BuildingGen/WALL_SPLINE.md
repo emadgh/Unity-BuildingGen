@@ -36,6 +36,8 @@ The generated chunks remain vertical. When the two ends of a chunk sit at differ
 
 `Conform + Generate` enables terrain conform and regenerates immediately.
 
+For production scenes, use a dedicated terrain/ground layer whenever possible. SceneView preview queries temporarily ignore colliders below the current `__GeneratedWallSpline`, so an already-generated wall does not become its own terrain hit while editing gates or control points.
+
 ## Gates and wall openings
 
 `WallSpline.openings` stores explicit openings by distance along the spline.
@@ -51,7 +53,17 @@ Each opening contains:
 
 The wall chunks are omitted across the opening interval. Crown pieces, pillars, buttresses and niches also avoid the reserved opening range.
 
-Use **Add Gate Marker** to add a default marker at the middle of the current path. Red Scene-view guides show the reserved opening width.
+Use **Add Gate Marker** to add a default marker at the middle of the current path.
+
+### SceneView gate editing
+
+When `Show Opening Guides` is enabled, each gate can be edited directly in SceneView:
+
+- **Red sphere handle** — drag along the wall tangent to move the gate center and update `Distance`.
+- **Yellow cube handle** — drag along the wall to change `Width`.
+- The gate label shows both current distance and width in meters.
+- If the spline becomes shorter after moving/removing control points, gate distances are clamped to the valid path length.
+- Reversing the spline remaps gate distances so the gates remain at the corresponding physical locations on the reversed path.
 
 Recommended gate-prefab convention:
 
