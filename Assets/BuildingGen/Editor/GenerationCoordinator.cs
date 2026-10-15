@@ -4,8 +4,8 @@ using Object = UnityEngine.Object;
 namespace Emadgh.BuildingGen.Editor
 {
     /// <summary>
-    /// Keeps the original generator intact while allowing v0.5 facade bays to replace
-    /// legacy random facade openings. This makes the new planner opt-in and reversible.
+    /// Selects the active geometry backend.
+    /// SolidMesh is the production direction; LegacySegmented is retained temporarily for comparison/fallback.
     /// </summary>
     internal static class GenerationCoordinator
     {
@@ -14,6 +14,61 @@ namespace Emadgh.BuildingGen.Editor
             if (generator == null)
                 return;
 
+            if (generator.geometryMode == BuildingGeometryMode.SolidMesh)
+            {
+                SolidBuildingBuilder.Generate(generator);
+                return;
+            }
+
+            GenerateLegacy(generator);
+        }
+
+        public static void Clear(BuildingGenerator generator)
+        {
+            if (generator == null)
+                return;
+
+            bool hasSolidBody =
+                generator.generatedRoot != null
+                && generator.generatedRoot.Find("SolidBuildingMesh") != null;
+
+            if (generator.geometryMode == BuildingGeometryMode.SolidMesh || hasSolidBody)
+                SolidBuildingBuilder.Clear(generator);
+            else
+                BuildingBuilder.Clear(generator);
+        }
+
+        public static GameObject BakeCopy(BuildingGenerator generator)
+        {
+            if (generator == null)
+                return null;
+
+            bool hasSolidBody =
+                generator.generatedRoot != null
+                && generator.generatedRoot.Find("SolidBuildingMesh") != null;
+
+            if (generator.geometryMode == BuildingGeometryMode.SolidMesh || hasSolidBody)
+                return SolidBuildingBuilder.BakeCopy(generator);
+
+            GameObject baked = BuildingBuilder.BakeCopy(generator);
+            if (baked == null)
+                return null;
+
+            FacadeBayDefinition[] definitions =
+                baked.GetComponentsInChildren<FacadeBayDefinition>(true);
+            for (int i = 0; i < definitions.Length; i++)
+            {
+                FacadeBayDefinition definition = definitions[i];
+                if (definition.cutterRoot != null)
+                    Object.DestroyImmediate(definition.cutterRoot.gameObject);
+                Object.DestroyImmediate(definition);
+            }
+
+            return baked;
+        }
+
+        private static void GenerateLegacy(BuildingGenerator generator)
+        {
             if (!generator.useFacadeBayPlanner)
             {
                 BuildingBuilder.Generate(generator);
@@ -30,10 +85,11 @@ namespace Emadgh.BuildingGen.Editor
 
             try
             {
-                // Keep only the legacy primary entrance when requested. Its position is reserved
-                // by FacadeBayBuildingBridge before the new bays are planned, so hashti still works.
                 generator.windowsPerFloor = Vector2Int.zero;
-                generator.generateFrontOpenings = frontOpenings && generator.keepPrimaryEntranceDoor && generator.generateGroundFloorDoor;
+                generator.generateFrontOpenings =
+                    frontOpenings
+                    && generator.keepPrimaryEntranceDoor
+                    && generator.generateGroundFloorDoor;
                 generator.generateBackOpenings = false;
                 generator.generateSideOpenings = false;
                 generator.generateCourtyardOpenings = false;
@@ -54,29 +110,6 @@ namespace Emadgh.BuildingGen.Editor
             }
 
             FacadeBayBuildingBridge.Generate(generator);
-        }
-
-        public static void Clear(BuildingGenerator generator)
-        {
-            BuildingBuilder.Clear(generator);
-        }
-
-        public static GameObject BakeCopy(BuildingGenerator generator)
-        {
-            GameObject baked = BuildingBuilder.BakeCopy(generator);
-            if (baked == null)
-                return null;
-
-            FacadeBayDefinition[] definitions = baked.GetComponentsInChildren<FacadeBayDefinition>(true);
-            for (int i = 0; i < definitions.Length; i++)
-            {
-                FacadeBayDefinition definition = definitions[i];
-                if (definition.cutterRoot != null)
-                    Object.DestroyImmediate(definition.cutterRoot.gameObject);
-                Object.DestroyImmediate(definition);
-            }
-
-            return baked;
         }
     }
 }
