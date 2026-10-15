@@ -1,246 +1,248 @@
 # Unity BuildingGen — Yazd Architecture
 
-Editor-time procedural building generator for Unity, focused on traditional Yazd / central-Iran urban fabric.
+Editor-time procedural architecture tools for Unity, focused on traditional Yazd / central-Iran urban fabric.
 
-## Current v0.3 scope
+## Current direction — v0.6
 
-- Deterministic seed-based generation.
-- Four footprint modes: `Rectangle`, `LShape`, `UShape`, `Courtyard`.
-- Generic polygon wall-segment pipeline for concave and courtyard plans.
-- True central courtyard with an open roof and separate courtyard-facing rules.
-- Weighted door/window prefab libraries through `YazdBuildingStyle`.
-- Opening prefabs contain visible art plus a dedicated closed CSG cutter mesh.
-- Automatic prefab placement and editor-time wall subtraction.
-- Recessed entrance art while the cutter stays aligned to the host wall.
-- Simple generated hashti + straight corridor + 90-degree bent corridor guide tied to the actual generated door position.
-- Reusable architectural modules through `YazdModuleDefinition`.
-- Iwan modules can optionally contain a `Cutter` root and carve the host wall.
-- Repeated courtyard arcade bays.
-- Badgir prefab pool with deterministic roof placement.
-- Dome and barrel-vault roof-form prefab pools.
-- Flat roof slabs and parapets following the generated perimeter.
-- Inspector footprint presets plus a one-click `Traditional Yazd Courtyard` preset.
-- Generate, Randomize, previous/next Seed, Clear and Bake Copy actions.
-- One-click sample factory for primitive test assets.
+The building body is **not modular wall geometry**. `BuildingGenerator` now defaults to `SolidMesh`, which produces one procedural `MeshFilter` / `MeshRenderer` body with real wall thickness.
+
+```text
+YazdBuilding
+└── __GeneratedBuilding
+    ├── SolidBuildingMesh       one generated building mesh
+    ├── FacadeSurfaces          metadata-only placement anchors
+    ├── ArchitecturalDetails
+    │   ├── Openings
+    │   └── RoofModules
+    └── FacadeBays
+```
+
+`FacadeSurfaces` do not render walls. They only describe facade width/orientation/role so door, window, iwan, niche and arcade rules can place their art and cutters against the single body mesh.
+
+### Solid building support
+
+- deterministic Seed generation;
+- `Rectangle`, `LShape`, `UShape`, `Courtyard` footprints;
+- hollow wall-shell construction with physical wall thickness;
+- one generated mesh for walls + roof;
+- separate wall and roof submeshes/materials;
+- open central courtyard with courtyard-facing wall shell and roof ring;
+- optional `MeshCollider` on the generated body;
+- metadata-only logical facade surfaces;
+- door/window visual prefabs with closed cutter meshes;
+- reservation-based facade bays: `Window / Door / Iwan / Arcade / Niche / Blank`;
+- every opening/FacadeBay Boolean targets the same `SolidBuildingMesh`;
+- Badgir and roof-form detail prefabs can remain separate visual assets;
+- non-destructive regenerate / randomize / seed navigation / bake workflow.
+
+The older per-wall prototype is still available temporarily through:
+
+`Building Geometry Mode = LegacySegmented`
+
+It exists only as a comparison/fallback while the solid backend is tested with real production assets.
 
 ## Install into an existing Unity project
 
-Copy this repository's `Assets/BuildingGen` folder into your Unity project's `Assets` folder.
+Copy:
 
-Install **ProBuilder** from Unity Package Manager. The current Boolean backend uses ProBuilder's experimental CSG. Enable:
+`Assets/BuildingGen`
+
+into your Unity project's `Assets` folder.
+
+Install **ProBuilder** from Unity Package Manager. The current CSG backend uses ProBuilder experimental CSG. Enable:
 
 `Edit > Preferences/Settings > ProBuilder > Experimental Features Enabled`
 
-If experimental CSG is unavailable, BuildingGen still creates massing and places visible prefabs/modules. Door, window and iwan cutters simply do not modify the walls and the Inspector shows a warning.
+If CSG is unavailable, the generated solid body and visible prefab art still appear, but cutter meshes do not subtract from the building.
 
-## First demo
+## Demos
 
-After Unity recompiles scripts, run:
+### Solid building demo
 
-`Tools > BuildingGen > Create Simple Yazd Demo`
+Run:
 
-The command creates sample assets under:
+`Tools > BuildingGen > Create Solid Yazd Demo`
 
-`Assets/BuildingGen/Samples/Generated`
+This creates/reuses the primitive test assets and regenerates `YazdBuilding_Demo` through the one-mesh backend.
 
-and creates `YazdBuilding_Demo` in the active scene.
+### Facade bay demo
 
-The v0.3 demo starts as a two-floor courtyard house with:
+The reservation planner supports coherent, non-overlapping facade decisions for:
 
-- arched door and window samples,
-- separate low-poly arch cutters,
-- a recessed iwan with its own arch cutter,
-- repeated courtyard arcade bays,
-- a procedural hashti / bent entrance-route guide,
-- a simple badgir,
-- simple dome and barrel-vault roof modules,
-- open central courtyard,
-- roof parapets,
-- deterministic seed `1403`.
+- windows,
+- doors,
+- iwans,
+- arcade bays,
+- niches,
+- intentional blank bays.
 
-Select `YazdBuilding_Demo` and use Randomize, Seed navigation, the footprint buttons, or `Traditional Yazd Courtyard`.
+In `SolidMesh` mode the planner uses logical facade anchors but all cuts are applied to the single building body.
 
-## 3ds Max opening-prefab authoring convention
+### Wall spline demos
 
-Build the final door/window art in 3ds Max. The Unity prefab root uses this convention:
+Run:
 
-- Pivot: bottom-center of the architectural opening.
-- Local `+Z`: points outward from the facade.
-- Local `+Y`: up.
-- `Visual`: final art: frame, glass, wood, decorations, etc.
-- `Cutter`: separate, closed/manifold mesh representing the void removed from the wall.
-- Cutter depth should exceed the largest supported wall thickness on both sides. A 1.0–1.2 m cutter is suitable for roughly 0.35–0.50 m adobe walls.
-- Keep the cutter low-poly. Visual complexity stays independent from Boolean complexity.
-- For arches, the cutter itself contains the arch silhouette; BuildingGen does not replace it with a rectangular opening.
+`Tools > BuildingGen > Create Wall Spline Demo`
+
+or:
+
+`Tools > BuildingGen > Create Advanced Wall Spline Demo`
+
+The spline-wall tool currently supports:
+
+- Polyline and smooth Catmull-Rom paths;
+- Scene View control-point editing;
+- terrain conform;
+- gate/opening markers by distance along the spline;
+- simple, ruined and decorated adobe wall styles;
+- crown/top prefab pools;
+- pillars;
+- buttresses;
+- niches;
+- broken end caps;
+- deterministic Seed variation;
+- bake copy.
+
+See `Assets/BuildingGen/WALL_SPLINE.md`.
+
+## 3ds Max opening authoring
+
+Doors/windows remain DCC-authored art even though the building body itself is procedural.
+
+Recommended prefab structure:
 
 ```text
 PF_Window_Arch_01
 ├── OpeningDefinition
 ├── Visual
-│   └── imported art
+│   └── imported Max art
 └── Cutter
-    └── closed cutter mesh
+    └── closed low-poly cutter mesh
 ```
 
-Assign `Visual Root` and `Cutter Root` in `OpeningDefinition`.
+Convention:
 
-## Architectural module convention
+- root pivot = bottom-center of the architectural opening;
+- local `+Y` = up;
+- local `+Z` = outward from the facade;
+- `Visual` can be high-detail art;
+- `Cutter` should be simple, closed/manifold, and deep enough to cross the full supported wall thickness.
 
-All reusable Yazd modules use `YazdModuleDefinition`.
+The visual mesh remains separate. The cutter modifies the generated solid body.
 
-Facade modules use:
+For reservation-planner elements use `FacadeBayDefinition` with the same pivot/orientation convention.
 
-- Pivot: bottom-center.
-- `+Y`: up.
-- `+Z`: outward from the facade.
+## Solid mesh construction
 
-Roof modules use bottom-center / `+Y` up; their yaw can be randomized by the generator.
-
-Supported module kinds currently include:
-
-- `Iwan`
-- `Badgir`
-- `ArcadeBay`
-- `Dome`
-- `BarrelVault`
-- `Hashti`
-- generic roof/facade props
-
-### Iwan with CSG recess
+For a normal footprint:
 
 ```text
-PF_Iwan_01
-├── YazdModuleDefinition
-│   └── Cut Host Surface = true
-├── Visual
-│   └── imported iwan art
-└── Cutter
-    └── closed arch/deep-recess mesh
+outer footprint
+    ↓
+inward offset by Wall Thickness
+    ↓
+closed exterior/interior wall shell
+    +
+roof top + interior ceiling
+    ↓
+one generated Mesh
 ```
 
-Assign the module's `Cutter Root`. If `BuildingGenerator > Cut Iwan Recess` is enabled, the cutter is subtracted from the chosen host wall and then hidden.
-
-### Arcade bay
+For a courtyard building:
 
 ```text
-PF_ArcadeBay_01
-├── YazdModuleDefinition (ArcadeBay)
-└── Visual
+outer wall shell
++
+courtyard-facing wall shell
++
+open courtyard
++
+roof ring / ceiling ring
+=
+one generated Mesh
 ```
 
-The generator repeats these bays along courtyard-facing wall segments. `Arcade Bay Width`, `Arcade Depth`, `Arcade Side Chance`, and `Arcade Bay Chance` control the layout.
+The interior is not filled with a giant block; it is an architectural shell with real wall thickness and an enclosed roof volume. This keeps door/window cutter depth local to the wall rather than requiring cutters to cross the entire building.
 
-### Roof forms
-
-```text
-PF_Dome_01
-└── YazdModuleDefinition (Dome)
-
-PF_Vault_01
-└── YazdModuleDefinition (BarrelVault)
-```
-
-Nominal width/depth and edge clearance are used to reject modules that do not fit a roof mass.
-
-## Entrance sequence / hashti
-
-v0.3 records the actual generated entrance position. The simple procedural guide is built from that point, so a non-centered seeded door produces a matching route.
-
-Current generated guide:
-
-```text
-Street / facade
-      |
-    Door
-      |
-Straight corridor
-      |
-    Hashti
-      └──── 90° bent corridor
-```
-
-The guide uses simple wall/floor primitives on purpose. It establishes the placement/rule system first; production hashti and corridor kits can replace those primitives later.
-
-Controls:
-
-- `Generate Hashti And Corridor`
-- `Hashti Size`
-- `Entrance Corridor Length`
-- `Entrance Corridor Width`
-- `Entrance Turn Length`
-- `Entrance Turn = Auto / Left / Right`
-
-`Auto` is deterministic from the building Seed.
+See `Assets/BuildingGen/SOLID_MESH.md` for implementation details.
 
 ## Footprints
 
 ### Rectangle
 
-Standard enclosed mass.
+Standard enclosed footprint.
 
 ### L Shape
 
-Rear bar plus one side wing. `Wing Width` controls wing thickness.
+Concave L-shaped mass controlled by `Wing Width`.
 
 ### U Shape
 
-Two side wings plus a rear bar with an open front recess. `U Recess Depth` controls how deeply the open space cuts into the footprint.
+Concave U-shaped mass with `U Recess Depth`.
 
 ### Courtyard
 
-Enclosed outer footprint with a true open central court. `Courtyard Width` and `Courtyard Depth` control the void. Courtyard-facing walls use their own opening probability and can receive repeated arcade modules and an iwan.
+Outer rectangular footprint plus a true open central courtyard. `Courtyard Width` and `Courtyard Depth` control the void.
 
 ## Non-destructive workflow
 
-`BuildingGenerator` is the source of truth. Every Generate/Randomize pass deletes `__GeneratedBuilding` and rebuilds from parameters and Seed. Boolean operations are always reapplied to fresh source wall primitives rather than repeatedly cutting an already-modified mesh.
+`BuildingGenerator` is the source of truth.
 
-Use **Bake Copy** only after accepting a generated result. The baked copy is detached from the generator and has opening/module cutters plus generator metadata removed.
+Each Generate/Randomize pass removes `__GeneratedBuilding` and reconstructs the clean source mesh before applying cutters again. Boolean operations are therefore not repeatedly applied to an already-damaged mesh.
+
+Use **Bake Copy** after accepting a result. The baked copy duplicates the generated body mesh, removes cutter metadata, and removes logical facade anchors while preserving imported visual prefab meshes as shared assets.
 
 ## Architecture
 
 ```text
 BuildingGenerator
     |
+    +-- Geometry Mode
+    |       +-- SolidMesh        default
+    |       +-- LegacySegmented  temporary fallback
+    |
     +-- footprint parameters
-    |       +-- Rectangle
-    |       +-- L
-    |       +-- U
-    |       +-- Courtyard
     |
-    +-- YazdBuildingStyle
-    |       +-- door/window pools
-    |       +-- iwan/badgir pools
-    |       +-- arcade pool
-    |       +-- dome/vault pools
-    |       +-- facade/module probabilities
-    |       +-- roof/parapet rules
+    +-- SolidBuildingMeshBuilder
+    |       +-- footprint
+    |       +-- wall thickness
+    |       +-- wall shell
+    |       +-- roof / ceiling
+    |       +-- UV0 / vertex color initialization
     |
-    +-- BuildingBuilder (Editor)
-            +-- polygon wall segments
-            +-- opening placement
-            +-- Boolean backend
-            +-- entrance sequence
-            +-- courtyard arcade
-            +-- iwan CSG
-            +-- roof forms / badgir
-            +-- bake
+    +-- SolidFacadeSurface       metadata only
+    |
+    +-- opening / facade planner
+    |       +-- Visual prefab
+    |       +-- Cutter prefab
+    |       +-- CSG on SolidBuildingMesh
+    |
+    +-- roof/detail placement
+    |
+    +-- bake
 ```
 
-The CSG implementation remains isolated behind `ProBuilderBooleanBackend`; it can be replaced without rewriting footprint generation, module placement or the prefab contracts.
+The CSG implementation remains isolated behind `ProBuilderBooleanBackend`, so a more robust production Boolean backend can replace it without changing the authoring contracts.
 
 ## Validation status
 
-The repository is still a drop-in `Assets/BuildingGen` tool rather than a complete Unity project with Editor CI. Static review is performed in the repository, but the target Unity version still needs to compile/run the scripts and exercise ProBuilder CSG in-editor.
+This repository is still a drop-in `Assets/BuildingGen` toolset rather than a complete Unity project with Editor CI.
+
+The branch/repository receives static code and geometry-topology review, but final validation still requires the target Unity Editor to:
+
+- compile the scripts;
+- generate all four footprint types;
+- run ProBuilder experimental CSG against real cutters;
+- inspect normals/UVs/colliders;
+- test Bake Copy and imported 3ds Max assets.
 
 ## Next production steps
 
-- Compile and geometry-test v0.3 in the target Unity project.
-- Replace generated sample prefabs with real Yazd assets from 3ds Max.
-- Replace the primitive hashti/corridor guide with modular room/corridor prefabs and courtyard connection rules.
-- Prevent arcade bays from occupying an iwan bay and add deliberate facade bay zoning.
-- Add stepped/multi-height massing instead of one uniform wall height.
-- Add proper dome/vault shells, roof transitions and squinches.
-- Add wall buttresses, niches, brick bands, decorative arches and recessed panels.
-- Add controlled age/damage variation and facade decals.
-- Add LOD/collider/lightmap bake stage.
-- Replace or augment experimental ProBuilder CSG if production tests require a more robust backend.
+- stepped / multi-height building massing while remaining one generated mesh;
+- solid parapet and roof-edge geometry;
+- room/hashti/interior-plan generation instead of primitive legacy guides;
+- production Boolean backend evaluation;
+- vertex-color channels for plaster wear, dirt and exposed adobe/brick;
+- UV2 / lightmap bake stage;
+- LOD and collider bake stage;
+- convert the spline-wall body from chunk primitives to one continuous generated wall mesh.
