@@ -2,110 +2,88 @@
 
 Editor-time procedural building generator for Unity, aimed at traditional Yazd / central-Iran urban fabric.
 
-## Current v0.1 scope
+## v0.2 features
 
-- Deterministic seed-based building generation.
-- Rectangular building mass with 1–5 floors.
-- Separate front/back/left/right wall meshes.
-- Weighted door/window prefab libraries through `YazdBuildingStyle`.
-- Each opening prefab contains visible art plus a dedicated closed CSG cutter mesh.
-- Automatic prefab placement and wall subtraction.
-- Flat roof and parapet generation.
-- Front/back/side facade probabilities.
-- Inspector actions: Generate, Randomize, previous/next Seed, Clear, Bake Copy.
-- One-click simple Yazd demo that creates sample arch-window/arch-door prefabs and a sample style asset.
+- Deterministic seed-based generation.
+- `Rectangle`, `LShape`, `UShape`, and `Courtyard` footprints.
+- Generic wall-segment generation for concave and courtyard plans.
+- Courtyard-facing opening rules and open courtyard roof.
+- Weighted door/window prefabs with separate low-poly Boolean cutter meshes.
+- Recessed entrance visuals while keeping cutters aligned to the wall.
+- Flat roof slabs and perimeter-following parapets.
+- Reusable `YazdModuleDefinition` prefabs.
+- Seed-driven iwan and badgir placement.
+- One-click simple Yazd courtyard demo.
 
-## Install into an existing Unity project
+## Install
 
-Copy this repository's `Assets/BuildingGen` folder into your Unity project's `Assets` folder.
+Keep this folder at `Assets/BuildingGen` in the Unity project.
 
-Install **ProBuilder** from Unity Package Manager. The v0.1 boolean backend uses ProBuilder's experimental CSG. In Unity enable:
+Install ProBuilder from Package Manager. The current CSG backend uses ProBuilder Experimental Features:
 
 `Edit > Preferences/Settings > ProBuilder > Experimental Features Enabled`
 
-If experimental CSG is disabled, BuildingGen still creates the massing and places the visible prefabs, but does not cut the wall. The Inspector displays a warning.
+Without CSG, massing and visible prefabs still generate, but walls are not cut.
 
-## First demo
+## Demo
 
-After Unity recompiles scripts:
+Run:
 
 `Tools > BuildingGen > Create Simple Yazd Demo`
 
-The command creates sample assets under:
+Generated sample assets are written under:
 
 `Assets/BuildingGen/Samples/Generated`
 
-and creates `YazdBuilding_Demo` in the active scene.
+The scene object `YazdBuilding_Demo` starts as a courtyard house and includes primitive arch door/window, iwan, and badgir samples.
 
-Select `YazdBuilding_Demo` and use **Randomize** or the Seed buttons.
-
-## 3ds Max opening-prefab authoring convention
-
-Build the final door/window art in 3ds Max. The Unity prefab root uses this convention:
-
-- Pivot: bottom-center of the architectural opening.
-- Local `+Z`: points out of the facade.
-- Local `+Y`: up.
-- `Visual`: imported final art; frame, glass, wood, decorations, etc.
-- `Cutter`: separate, closed/manifold mesh representing the void that must be removed from the wall.
-- Cutter depth should exceed the largest supported wall thickness on both sides. For example, a 1.0–1.2 m cutter depth is safe for a ~0.35–0.50 m adobe wall.
-- Keep the cutter low-poly. The visual asset can be high-detail; boolean complexity should come only from the opening silhouette.
-- For arches, the cutter itself should contain the arch profile. BuildingGen does not approximate it with a rectangular hole.
-
-Prefab hierarchy:
+## Opening prefab contract
 
 ```text
 PF_Window_Arch_01
+├── OpeningDefinition
 ├── Visual
-│   └── imported art
+│   └── imported 3ds Max art
 └── Cutter
-    └── closed cutter mesh
+    └── closed low-poly cutter mesh
 ```
 
-Add `OpeningDefinition` to the prefab root and assign `Visual Root` and `Cutter Root`.
+Authoring convention:
 
-## Non-destructive workflow
+- Pivot: bottom-center of opening.
+- `+Y`: up.
+- `+Z`: outward from facade.
+- Cutter must be closed/manifold and deeper than the maximum wall thickness.
+- Keep visual complexity separate from cutter complexity.
 
-`BuildingGenerator` is the source of truth. Regeneration deletes `__GeneratedBuilding` and rebuilds from the original parameters and Seed. It never applies another round of booleans to an already repeatedly edited source wall.
-
-Use **Bake Copy** only when a generated building is accepted. The baked copy is detached from the generator and has cutter objects/components removed.
-
-## Architecture
+## Architectural module contract
 
 ```text
-BuildingGenerator
-    |
-    +-- YazdBuildingStyle
-    |       +-- door prefab pool
-    |       +-- window prefab pool
-    |       +-- facade probabilities
-    |       +-- roof/parapet rules
-    |
-    +-- BuildingBuilder (Editor)
-            +-- massing
-            +-- opening placement
-            +-- CSG backend
-            +-- roof/parapet
-            +-- bake
-
-Opening prefab
-    +-- OpeningDefinition
-    +-- Visual
-    +-- Cutter
+PF_Badgir_01
+├── YazdModuleDefinition
+└── Visual
 ```
 
-The CSG implementation is isolated behind `ProBuilderBooleanBackend`; later versions can replace it without rewriting facade placement or the prefab format.
+Use the same bottom-center / `+Z` outward orientation. `YazdModuleDefinition` stores kind, nominal size, selection weight and edge clearance.
 
-## Planned next steps
+## Non-destructive generation
 
-- Real Yazd asset library imported from 3ds Max.
-- Multiple building footprints: L, U, courtyard, narrow alley house.
-- Iwan / recessed entrance rules.
-- Badgir (windcatcher) modules.
-- Dome and barrel-vault roof modules.
-- Wall buttresses and stepped rooflines.
-- Facade bays, niches, brick bands, and decorative arches.
-- Controlled age/damage variation.
-- Courtyard doors and internal facade generation.
+`BuildingGenerator` remains the source of truth. Every Generate/Randomize pass deletes `__GeneratedBuilding` and rebuilds from the source parameters and Seed. `Bake Copy` creates a detached accepted result.
+
+## Current limitations
+
+- Boolean backend is still ProBuilder experimental CSG.
+- Iwan v0.2 is a visual module and does not yet carve a deep architectural recess.
+- Sample assets are intentionally primitive placeholders.
+- v0.2 still needs compile/geometry validation inside the target Unity Editor version.
+
+## Next targets
+
+- Real 3ds Max Yazd asset set.
+- Iwan recess CSG.
+- Hashti/entrance corridor generation.
+- Barrel vaults and domes.
+- Stepped roof volumes.
+- Courtyard arcades and repeated bays.
+- Buttresses, niches, brick bands, aging/damage.
 - LOD/collider/lightmap bake stage.
-- Replace/augment experimental ProBuilder CSG if production testing requires a more robust backend.
