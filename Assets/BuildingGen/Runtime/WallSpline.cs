@@ -30,8 +30,6 @@ namespace Emadgh.BuildingGen
         [Header("Generation")]
         public int seed = 2001;
         public bool generateCollider = true;
-        [Tooltip("Keep generated pieces grouped below this object. Regeneration replaces this group non-destructively.")]
-        public bool keepGeneratedHierarchy = true;
 
         [HideInInspector] public Transform generatedRoot;
 
