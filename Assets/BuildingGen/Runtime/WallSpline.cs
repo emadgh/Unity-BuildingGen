@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -7,6 +8,18 @@ namespace Emadgh.BuildingGen
     {
         Polyline,
         SmoothCatmullRom
+    }
+
+    [Serializable]
+    public sealed class WallSplineOpening
+    {
+        public bool enabled = true;
+        [Min(0f)] public float distance = 4f;
+        [Min(0.3f)] public float width = 1.6f;
+        [Tooltip("Optional visible gate/arch prefab placed at the opening. The wall itself is skipped across this distance range.")]
+        public GameObject prefab;
+        public float verticalOffset = 0f;
+        public Vector3 localEulerOffset = Vector3.zero;
     }
 
     /// <summary>
@@ -27,6 +40,21 @@ namespace Emadgh.BuildingGen
             new Vector3(5f, 0f, 0f)
         };
 
+        [Header("Terrain Conform")]
+        public bool conformToTerrain = false;
+        public LayerMask terrainLayerMask = -1;
+        [Min(0.5f)] public float terrainRayHeight = 25f;
+        [Min(1f)] public float terrainRayDistance = 100f;
+        public float terrainOffset = 0f;
+
+        [Header("Openings / Gates")]
+        public List<WallSplineOpening> openings = new List<WallSplineOpening>();
+        public bool showOpeningGuides = true;
+
+        [Header("Decoration Side")]
+        [Tooltip("Flip buttresses/niches to the opposite side of the spline.")]
+        public bool flipDecorationSide = false;
+
         [Header("Generation")]
         public int seed = 2001;
         public bool generateCollider = true;
@@ -41,10 +69,24 @@ namespace Emadgh.BuildingGen
         private void OnValidate()
         {
             smoothSubdivisions = Mathf.Clamp(smoothSubdivisions, 1, 16);
+            terrainRayHeight = Mathf.Max(0.5f, terrainRayHeight);
+            terrainRayDistance = Mathf.Max(1f, terrainRayDistance);
+
             if (controlPoints == null)
                 controlPoints = new List<Vector3>();
             while (controlPoints.Count < 2)
                 controlPoints.Add(new Vector3(controlPoints.Count * 3f, 0f, 0f));
+
+            if (openings == null)
+                openings = new List<WallSplineOpening>();
+
+            for (int i = 0; i < openings.Count; i++)
+            {
+                if (openings[i] == null)
+                    continue;
+                openings[i].distance = Mathf.Max(0f, openings[i].distance);
+                openings[i].width = Mathf.Max(0.3f, openings[i].width);
+            }
         }
     }
 }
