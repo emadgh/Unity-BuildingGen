@@ -105,7 +105,7 @@ namespace Emadgh.BuildingGen.Editor
 
         private static void DrawPath(WallSpline spline)
         {
-            List<Vector3> sampled = WallSplineBuilder.GetSampledPath(spline);
+            List<Vector3> sampled = WallSplineEditorPathUtility.GetSampledPath(spline);
             if (sampled.Count < 2)
                 return;
 
@@ -126,7 +126,7 @@ namespace Emadgh.BuildingGen.Editor
             if (!spline.showOpeningGuides || spline.openings == null || spline.openings.Count == 0)
                 return;
 
-            List<Vector3> path = WallSplineBuilder.GetSampledPath(spline);
+            List<Vector3> path = WallSplineEditorPathUtility.GetSampledPath(spline);
             float totalLength = CalculateLength(path);
             if (totalLength < 0.001f)
                 return;
@@ -269,7 +269,7 @@ namespace Emadgh.BuildingGen.Editor
         private static void AddGateMarker(WallSpline spline)
         {
             Undo.RecordObject(spline, "Add wall gate marker");
-            float length = WallSplineBuilder.GetPathLength(spline);
+            float length = WallSplineEditorPathUtility.GetPathLength(spline);
             WallSplineOpening opening = new WallSplineOpening
             {
                 enabled = true,
@@ -319,7 +319,7 @@ namespace Emadgh.BuildingGen.Editor
 
         private static void ReversePoints(WallSpline spline)
         {
-            float length = WallSplineBuilder.GetPathLength(spline);
+            float length = WallSplineEditorPathUtility.GetPathLength(spline);
             Undo.RecordObject(spline, "Reverse wall spline");
             spline.controlPoints.Reverse();
 
@@ -342,7 +342,7 @@ namespace Emadgh.BuildingGen.Editor
             if (spline.openings == null || spline.openings.Count == 0)
                 return;
 
-            float length = WallSplineBuilder.GetPathLength(spline);
+            float length = WallSplineEditorPathUtility.GetPathLength(spline);
             for (int i = 0; i < spline.openings.Count; i++)
             {
                 WallSplineOpening opening = spline.openings[i];
