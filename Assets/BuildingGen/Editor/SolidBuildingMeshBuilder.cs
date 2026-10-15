@@ -561,7 +561,7 @@ namespace Emadgh.BuildingGen.Editor
                 Vector2 pj = polygon[j];
                 bool crosses = ((pi.y > point.y) != (pj.y > point.y))
                     && (point.x < (pj.x - pi.x) * (point.y - pi.y)
-                        / Mathf.Max(0.000001f, pj.y - pi.y) + pi.x);
+                        / (pj.y - pi.y) + pi.x);
                 if (crosses)
                     inside = !inside;
             }
