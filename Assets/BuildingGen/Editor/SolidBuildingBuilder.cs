@@ -83,12 +83,16 @@ namespace Emadgh.BuildingGen.Editor
 
             if (existing != null)
             {
-                MeshFilter[] filters = existing.GetComponentsInChildren<MeshFilter>(true);
-                for (int i = 0; i < filters.Length; i++)
+                Transform body = existing.Find(SolidBodyName);
+                if (body != null)
                 {
-                    MeshFilter filter = filters[i];
-                    if (filter != null && filter.sharedMesh != null && !AssetDatabase.Contains(filter.sharedMesh))
+                    MeshFilter filter = body.GetComponent<MeshFilter>();
+                    if (filter != null
+                        && filter.sharedMesh != null
+                        && !AssetDatabase.Contains(filter.sharedMesh))
+                    {
                         Object.DestroyImmediate(filter.sharedMesh);
+                    }
                 }
 
                 Undo.DestroyObjectImmediate(existing.gameObject);
@@ -108,20 +112,20 @@ namespace Emadgh.BuildingGen.Editor
             baked.transform.SetParent(generator.transform.parent, true);
             Undo.RegisterCreatedObjectUndo(baked, "Bake solid building");
 
-            MeshFilter[] filters = baked.GetComponentsInChildren<MeshFilter>(true);
-            for (int i = 0; i < filters.Length; i++)
+            Transform bakedBody = baked.transform.Find(SolidBodyName);
+            if (bakedBody != null)
             {
-                MeshFilter filter = filters[i];
-                if (filter.sharedMesh == null)
-                    continue;
+                MeshFilter filter = bakedBody.GetComponent<MeshFilter>();
+                if (filter != null && filter.sharedMesh != null)
+                {
+                    Mesh copy = Object.Instantiate(filter.sharedMesh);
+                    copy.name = filter.sharedMesh.name + "_Baked";
+                    filter.sharedMesh = copy;
 
-                Mesh copy = Object.Instantiate(filter.sharedMesh);
-                copy.name = filter.sharedMesh.name + "_Baked";
-                filter.sharedMesh = copy;
-
-                MeshCollider collider = filter.GetComponent<MeshCollider>();
-                if (collider != null)
-                    collider.sharedMesh = copy;
+                    MeshCollider collider = bakedBody.GetComponent<MeshCollider>();
+                    if (collider != null)
+                        collider.sharedMesh = copy;
+                }
             }
 
             Transform facadeRoot = baked.transform.Find(FacadeRootName);
