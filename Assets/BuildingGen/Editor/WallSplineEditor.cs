@@ -25,7 +25,7 @@ namespace Emadgh.BuildingGen.Editor
 
             EditorGUILayout.Space(8f);
             EditorGUILayout.HelpBox(
-                "Scene editing: drag point handles. Shift + left-click appends a point. Gate markers use distance along the spline and stay meaningful when the path changes.",
+                "Scene editing: drag point handles. Shift + left-click appends a point. Gate markers use distance along the spline. In SceneView drag the red gate center handle along the wall and the yellow handle to change gate width.",
                 MessageType.Info);
 
             EditorGUILayout.LabelField("Spline Editing", EditorStyles.boldLabel);
@@ -98,7 +98,7 @@ namespace Emadgh.BuildingGen.Editor
                 return;
 
             DrawPath(spline);
-            DrawOpeningGuides(spline);
+            HandleOpeningGuides(spline);
             HandlePoints(spline);
             HandleShiftClickAppend(spline);
         }
@@ -121,10 +121,17 @@ namespace Emadgh.BuildingGen.Editor
             }
         }
 
-        private static void DrawOpeningGuides(WallSpline spline)
+        private static void HandleOpeningGuides(WallSpline spline)
         {
-            if (!spline.showOpeningGuides || spline.openings == null)
+            if (!spline.showOpeningGuides || spline.openings == null || spline.openings.Count == 0)
                 return;
+
+            List<Vector3> path = WallSplineBuilder.GetSampledPath(spline);
+            float totalLength = CalculateLength(path);
+            if (totalLength < 0.001f)
+                return;
+
+            bool changed = false;
 
             for (int i = 0; i < spline.openings.Count; i++)
             {
@@ -132,20 +139,72 @@ namespace Emadgh.BuildingGen.Editor
                 if (opening == null || !opening.enabled)
                     continue;
 
+                opening.distance = Mathf.Clamp(opening.distance, 0f, totalLength);
+
                 Vector3 localPosition;
                 Vector3 localTangent;
-                if (!WallSplineBuilder.EvaluateSplineAtDistance(spline, opening.distance, out localPosition, out localTangent))
+                if (!EvaluatePathAtDistance(path, opening.distance, out localPosition, out localTangent))
                     continue;
 
                 Vector3 worldPosition = spline.transform.TransformPoint(localPosition);
                 Vector3 worldTangent = spline.transform.TransformDirection(localTangent).normalized;
                 Vector3 side = Vector3.Cross(Vector3.up, worldTangent).normalized;
                 float half = opening.width * 0.5f;
+                float handleSize = HandleUtility.GetHandleSize(worldPosition) * 0.10f;
 
                 Handles.color = new Color(0.95f, 0.2f, 0.15f, 1f);
                 Handles.DrawAAPolyLine(5f, worldPosition - worldTangent * half, worldPosition + worldTangent * half);
                 Handles.DrawLine(worldPosition, worldPosition + Vector3.up * 2.2f);
-                Handles.Label(worldPosition + Vector3.up * 2.35f + side * 0.1f, "Gate " + i + "  " + opening.width.ToString("0.00") + "m");
+                Handles.Label(
+                    worldPosition + Vector3.up * 2.35f + side * 0.1f,
+                    "Gate " + i + "  D:" + opening.distance.ToString("0.00") + "m  W:" + opening.width.ToString("0.00") + "m");
+
+                EditorGUI.BeginChangeCheck();
+                Handles.color = new Color(0.95f, 0.2f, 0.15f, 1f);
+                Vector3 movedCenter = Handles.Slider(
+                    worldPosition,
+                    worldTangent,
+                    handleSize,
+                    Handles.SphereHandleCap,
+                    0f);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    if (!changed)
+                        Undo.RecordObject(spline, "Move wall gate");
+
+                    float worldDelta = Vector3.Dot(movedCenter - worldPosition, worldTangent);
+                    float localScale = spline.transform.TransformVector(localTangent).magnitude;
+                    if (localScale < 0.0001f)
+                        localScale = 1f;
+
+                    opening.distance = Mathf.Clamp(opening.distance + worldDelta / localScale, 0f, totalLength);
+                    changed = true;
+                }
+
+                EditorGUI.BeginChangeCheck();
+                Handles.color = new Color(1f, 0.78f, 0.1f, 1f);
+                Vector3 widthHandlePosition = worldPosition + worldTangent * half;
+                Vector3 movedWidthHandle = Handles.Slider(
+                    widthHandlePosition,
+                    worldTangent,
+                    handleSize * 0.85f,
+                    Handles.CubeHandleCap,
+                    0f);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    if (!changed)
+                        Undo.RecordObject(spline, "Resize wall gate");
+
+                    float projectedHalfWidth = Mathf.Abs(Vector3.Dot(movedWidthHandle - worldPosition, worldTangent));
+                    opening.width = Mathf.Max(0.3f, projectedHalfWidth * 2f);
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                EditorUtility.SetDirty(spline);
+                WallSplineBuilder.Generate(spline);
             }
         }
 
@@ -174,6 +233,7 @@ namespace Emadgh.BuildingGen.Editor
 
             if (changed)
             {
+                ClampOpeningDistances(spline);
                 EditorUtility.SetDirty(spline);
                 WallSplineBuilder.Generate(spline);
             }
@@ -200,6 +260,7 @@ namespace Emadgh.BuildingGen.Editor
             Vector3 world = ray.GetPoint(enter);
             Undo.RecordObject(spline, "Append wall spline point");
             spline.controlPoints.Add(spline.transform.InverseTransformPoint(world));
+            ClampOpeningDistances(spline);
             EditorUtility.SetDirty(spline);
             WallSplineBuilder.Generate(spline);
             current.Use();
@@ -240,6 +301,7 @@ namespace Emadgh.BuildingGen.Editor
                     direction = Vector3.right * 3f;
                 spline.controlPoints.Add(last + direction.normalized * 3f);
             }
+            ClampOpeningDistances(spline);
             EditorUtility.SetDirty(spline);
             WallSplineBuilder.Generate(spline);
         }
@@ -250,6 +312,7 @@ namespace Emadgh.BuildingGen.Editor
                 return;
             Undo.RecordObject(spline, "Remove wall spline point");
             spline.controlPoints.RemoveAt(spline.controlPoints.Count - 1);
+            ClampOpeningDistances(spline);
             EditorUtility.SetDirty(spline);
             WallSplineBuilder.Generate(spline);
         }
@@ -266,12 +329,82 @@ namespace Emadgh.BuildingGen.Editor
                 {
                     WallSplineOpening opening = spline.openings[i];
                     if (opening != null)
-                        opening.distance = Mathf.Max(0f, length - opening.distance);
+                        opening.distance = Mathf.Clamp(length - opening.distance, 0f, length);
                 }
             }
 
             EditorUtility.SetDirty(spline);
             WallSplineBuilder.Generate(spline);
+        }
+
+        private static void ClampOpeningDistances(WallSpline spline)
+        {
+            if (spline.openings == null || spline.openings.Count == 0)
+                return;
+
+            float length = WallSplineBuilder.GetPathLength(spline);
+            for (int i = 0; i < spline.openings.Count; i++)
+            {
+                WallSplineOpening opening = spline.openings[i];
+                if (opening != null)
+                    opening.distance = Mathf.Clamp(opening.distance, 0f, length);
+            }
+        }
+
+        private static float CalculateLength(List<Vector3> path)
+        {
+            float total = 0f;
+            for (int i = 0; i < path.Count - 1; i++)
+            {
+                Vector3 delta = path[i + 1] - path[i];
+                delta.y = 0f;
+                total += delta.magnitude;
+            }
+            return total;
+        }
+
+        private static bool EvaluatePathAtDistance(
+            List<Vector3> path,
+            float targetDistance,
+            out Vector3 position,
+            out Vector3 tangent)
+        {
+            targetDistance = Mathf.Max(0f, targetDistance);
+            float cursor = 0f;
+            Vector3 lastTangent = Vector3.forward;
+
+            for (int i = 0; i < path.Count - 1; i++)
+            {
+                Vector3 a = path[i];
+                Vector3 b = path[i + 1];
+                Vector3 planar = b - a;
+                planar.y = 0f;
+                float length = planar.magnitude;
+                if (length < 0.001f)
+                    continue;
+
+                lastTangent = planar.normalized;
+                if (cursor + length >= targetDistance)
+                {
+                    float t = Mathf.Clamp01((targetDistance - cursor) / length);
+                    position = Vector3.Lerp(a, b, t);
+                    tangent = lastTangent;
+                    return true;
+                }
+
+                cursor += length;
+            }
+
+            if (path.Count > 0)
+            {
+                position = path[path.Count - 1];
+                tangent = lastTangent;
+                return true;
+            }
+
+            position = Vector3.zero;
+            tangent = Vector3.forward;
+            return false;
         }
     }
 }
