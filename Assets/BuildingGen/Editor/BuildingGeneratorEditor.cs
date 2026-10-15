@@ -11,6 +11,21 @@ namespace Emadgh.BuildingGen.Editor
             DrawDefaultInspector();
 
             BuildingGenerator generator = (BuildingGenerator)target;
+
+            EditorGUILayout.Space(8f);
+            if (generator.geometryMode == BuildingGeometryMode.SolidMesh)
+            {
+                EditorGUILayout.HelpBox(
+                    "v0.6 SolidMesh: the visible/collidable building body is one procedurally generated mesh. Facade objects are metadata-only anchors used to place cutters and art; they do not render modular walls.",
+                    MessageType.Info);
+            }
+            else
+            {
+                EditorGUILayout.HelpBox(
+                    "LegacySegmented keeps the older per-wall prototype backend. Use SolidMesh for the current production direction.",
+                    MessageType.Warning);
+            }
+
             EditorGUILayout.Space(10f);
             EditorGUILayout.LabelField("Yazd Footprint Presets", EditorStyles.boldLabel);
 
@@ -35,14 +50,16 @@ namespace Emadgh.BuildingGen.Editor
             if (!ProBuilderBooleanBackend.IsAvailable)
             {
                 EditorGUILayout.HelpBox(
-                    "CSG is currently unavailable. Install ProBuilder and enable Experimental Features in Edit > Preferences/Settings > ProBuilder. Prefabs/modules are still placed, but door/window/iwan/facade-bay cutters will not modify walls until CSG is active.",
+                    "CSG is currently unavailable. Install ProBuilder and enable Experimental Features in Edit > Preferences/Settings > ProBuilder. The solid body and visible prefabs still generate, but door/window/iwan/facade-bay cutters will not subtract until CSG is active.",
                     MessageType.Warning);
             }
 
             if (generator.footprint == BuildingFootprint.Courtyard)
             {
                 EditorGUILayout.HelpBox(
-                    "Courtyard mode keeps the central court open. It can add courtyard-facing bays, hashti/bent entrance route, badgir and roof-form modules.",
+                    generator.geometryMode == BuildingGeometryMode.SolidMesh
+                        ? "Courtyard mode generates an outer wall shell, a courtyard-facing wall shell and a roof ring inside the same MeshFilter. The courtyard remains open."
+                        : "Courtyard mode keeps the central court open and uses the legacy segmented wall backend.",
                     MessageType.Info);
             }
 
@@ -57,7 +74,9 @@ namespace Emadgh.BuildingGen.Editor
                 else
                 {
                     EditorGUILayout.HelpBox(
-                        "v0.5 reservation mode: Window / Door / Iwan / Arcade / Niche / Blank bays share one overlap map. Legacy random windows, iwan and courtyard arcade placement are bypassed during generation.",
+                        generator.geometryMode == BuildingGeometryMode.SolidMesh
+                            ? "Reservation planner is active. Window / Door / Iwan / Arcade / Niche / Blank bays use logical facade anchors, while all CSG cuts target the single solid building body."
+                            : "Reservation planner is active on the legacy segmented wall backend.",
                         MessageType.Info);
                 }
             }
@@ -118,8 +137,10 @@ namespace Emadgh.BuildingGen.Editor
             {
                 generator.width = Mathf.Max(generator.width, 12f);
                 generator.depth = Mathf.Max(generator.depth, 10f);
-                generator.courtyardWidth = Mathf.Min(generator.courtyardWidth, generator.width * 0.5f);
-                generator.courtyardDepth = Mathf.Min(generator.courtyardDepth, generator.depth * 0.5f);
+                generator.courtyardWidth =
+                    Mathf.Min(generator.courtyardWidth, generator.width * 0.5f);
+                generator.courtyardDepth =
+                    Mathf.Min(generator.courtyardDepth, generator.depth * 0.5f);
                 generator.generateCourtyardOpenings = true;
             }
             else if (footprint == BuildingFootprint.UShape)
@@ -136,13 +157,17 @@ namespace Emadgh.BuildingGen.Editor
         private static void ApplyTraditionalYazdPreset(BuildingGenerator generator)
         {
             Undo.RecordObject(generator, "Apply traditional Yazd preset");
+            generator.geometryMode = BuildingGeometryMode.SolidMesh;
             generator.footprint = BuildingFootprint.Courtyard;
             generator.width = Mathf.Max(generator.width, 13f);
             generator.depth = Mathf.Max(generator.depth, 11f);
-            generator.courtyardWidth = Mathf.Clamp(generator.width * 0.43f, 4.5f, 7f);
-            generator.courtyardDepth = Mathf.Clamp(generator.depth * 0.43f, 4f, 6.5f);
+            generator.courtyardWidth =
+                Mathf.Clamp(generator.width * 0.43f, 4.5f, 7f);
+            generator.courtyardDepth =
+                Mathf.Clamp(generator.depth * 0.43f, 4f, 6.5f);
             generator.floors = Mathf.Max(generator.floors, 2);
-            generator.wallThickness = Mathf.Max(generator.wallThickness, 0.36f);
+            generator.wallThickness =
+                Mathf.Max(generator.wallThickness, 0.36f);
             generator.generateCourtyardOpenings = true;
             generator.generateCourtyardArcade = true;
             generator.generateHashtiAndCorridor = true;
@@ -150,9 +175,11 @@ namespace Emadgh.BuildingGen.Editor
             generator.generateIwan = true;
             generator.cutIwanRecess = true;
             generator.generateBadgir = true;
-            generator.badgirCount = Mathf.Max(1, generator.badgirCount);
+            generator.badgirCount =
+                Mathf.Max(1, generator.badgirCount);
             generator.generateRoofForms = true;
-            generator.maxRoofForms = Mathf.Max(1, generator.maxRoofForms);
+            generator.maxRoofForms =
+                Mathf.Max(1, generator.maxRoofForms);
 
             EditorUtility.SetDirty(generator);
             GenerationCoordinator.Generate(generator);
