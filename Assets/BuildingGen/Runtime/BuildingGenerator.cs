@@ -60,6 +60,19 @@ namespace Emadgh.BuildingGen
         public bool recessedEntrance = true;
         [Range(0f, 1.2f)] public float entranceRecess = 0.35f;
 
+        [Header("Facade Bay Planner (v0.5)")]
+        [Tooltip("Use one reservation-based layout for windows, secondary doors, iwans, arcade bays, niches and intentional blank bays. The legacy primary entrance may be kept so the hashti route still works.")]
+        public bool useFacadeBayPlanner;
+        public FacadeBayCatalog facadeBayCatalog;
+        public FacadeSurfaceMask facadeBaySurfaces = FacadeSurfaceMask.Front | FacadeSurfaceMask.Courtyard;
+        [Tooltip("Candidate bay count per floor on each eligible wall.")]
+        public Vector2Int facadeBaysPerFloor = new Vector2Int(2, 4);
+        [Range(0f, 1f)] public float facadeBayFillChance = 0.9f;
+        [Range(0f, 0.45f)] public float facadeBayHorizontalJitter = 0.08f;
+        [Range(0, 4)] public int maxSpecialBaysPerWall = 1;
+        [Tooltip("Let the legacy generator create the primary front door first. The new planner reserves its interval before placing other bays, preserving the hashti/bent-corridor workflow.")]
+        public bool keepPrimaryEntranceDoor = true;
+
         [Header("Entrance Sequence")]
         [Tooltip("Create a simple hashti + bent corridor guide behind the generated entrance. It is intentionally simple so production prefabs can replace it later.")]
         public bool generateHashtiAndCorridor = true;
@@ -121,6 +134,12 @@ namespace Emadgh.BuildingGen
             entranceCorridorWidth = Mathf.Clamp(entranceCorridorWidth, 0.8f, hashtiSize * 0.8f);
             entranceCorridorLength = Mathf.Max(1f, entranceCorridorLength);
             entranceTurnLength = Mathf.Max(1f, entranceTurnLength);
+
+            int minLegacyWindows = Mathf.Max(0, windowsPerFloor.x);
+            windowsPerFloor = new Vector2Int(minLegacyWindows, Mathf.Max(minLegacyWindows, windowsPerFloor.y));
+
+            int minFacadeBays = Mathf.Max(0, facadeBaysPerFloor.x);
+            facadeBaysPerFloor = new Vector2Int(minFacadeBays, Mathf.Max(minFacadeBays, facadeBaysPerFloor.y));
         }
     }
 }
