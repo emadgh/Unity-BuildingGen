@@ -27,6 +27,16 @@ namespace Emadgh.BuildingGen
             new Vector3(5f, 0f, 0f)
         };
 
+        [Header("Gate / Gap Openings")]
+        public List<WallSplineOpening> openings = new List<WallSplineOpening>();
+
+        [Header("Terrain Conform")]
+        public bool conformToTerrain;
+        public LayerMask terrainLayers = ~0;
+        [Min(0.1f)] public float terrainRaycastHeight = 12f;
+        [Min(0.1f)] public float terrainRaycastDepth = 40f;
+        public float terrainVerticalOffset;
+
         [Header("Generation")]
         public int seed = 2001;
         public bool generateCollider = true;
@@ -41,10 +51,16 @@ namespace Emadgh.BuildingGen
         private void OnValidate()
         {
             smoothSubdivisions = Mathf.Clamp(smoothSubdivisions, 1, 16);
+            terrainRaycastHeight = Mathf.Max(0.1f, terrainRaycastHeight);
+            terrainRaycastDepth = Mathf.Max(0.1f, terrainRaycastDepth);
+
             if (controlPoints == null)
                 controlPoints = new List<Vector3>();
             while (controlPoints.Count < 2)
                 controlPoints.Add(new Vector3(controlPoints.Count * 3f, 0f, 0f));
+
+            if (openings == null)
+                openings = new List<WallSplineOpening>();
         }
     }
 }
