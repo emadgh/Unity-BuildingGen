@@ -48,6 +48,89 @@ namespace Emadgh.BuildingGen
             unchecked { seed++; }
         }
 
+        public void ClampOpeningDistancesToPath()
+        {
+            if (openings == null || openings.Count == 0)
+                return;
+
+            float pathLength = CalculateSampledPathLength();
+            for (int i = 0; i < openings.Count; i++)
+            {
+                WallSplineOpening opening = openings[i];
+                if (opening != null)
+                    opening.distance = Mathf.Clamp(opening.distance, 0f, pathLength);
+            }
+        }
+
+        public float CalculateSampledPathLength()
+        {
+            if (controlPoints == null || controlPoints.Count < 2)
+                return 0f;
+
+            if (interpolation == WallSplineInterpolation.Polyline)
+            {
+                float total = 0f;
+                int segmentCount = closedLoop ? controlPoints.Count : controlPoints.Count - 1;
+                for (int i = 0; i < segmentCount; i++)
+                {
+                    Vector3 a = controlPoints[i];
+                    Vector3 b = controlPoints[(i + 1) % controlPoints.Count];
+                    Vector3 delta = b - a;
+                    delta.y = 0f;
+                    total += delta.magnitude;
+                }
+                return total;
+            }
+
+            float smoothTotal = 0f;
+            int count = controlPoints.Count;
+            int smoothSegmentCount = closedLoop ? count : count - 1;
+            int subdivisions = Mathf.Max(1, smoothSubdivisions);
+
+            for (int segment = 0; segment < smoothSegmentCount; segment++)
+            {
+                Vector3 p0 = GetControlPoint(segment - 1);
+                Vector3 p1 = GetControlPoint(segment);
+                Vector3 p2 = GetControlPoint(segment + 1);
+                Vector3 p3 = GetControlPoint(segment + 2);
+                Vector3 previous = p1;
+
+                for (int step = 1; step <= subdivisions; step++)
+                {
+                    float t = step / (float)subdivisions;
+                    Vector3 current = CatmullRom(p0, p1, p2, p3, t);
+                    Vector3 delta = current - previous;
+                    delta.y = 0f;
+                    smoothTotal += delta.magnitude;
+                    previous = current;
+                }
+            }
+
+            return smoothTotal;
+        }
+
+        private Vector3 GetControlPoint(int index)
+        {
+            int count = controlPoints.Count;
+            if (closedLoop)
+            {
+                int wrapped = ((index % count) + count) % count;
+                return controlPoints[wrapped];
+            }
+
+            return controlPoints[Mathf.Clamp(index, 0, count - 1)];
+        }
+
+        private static Vector3 CatmullRom(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float t)
+        {
+            float t2 = t * t;
+            float t3 = t2 * t;
+            return 0.5f * ((2f * p1) +
+                           (-p0 + p2) * t +
+                           (2f * p0 - 5f * p1 + 4f * p2 - p3) * t2 +
+                           (-p0 + 3f * p1 - 3f * p2 + p3) * t3);
+        }
+
         private void OnValidate()
         {
             smoothSubdivisions = Mathf.Clamp(smoothSubdivisions, 1, 16);
@@ -61,6 +144,8 @@ namespace Emadgh.BuildingGen
 
             if (openings == null)
                 openings = new List<WallSplineOpening>();
+
+            ClampOpeningDistancesToPath();
         }
     }
 }
