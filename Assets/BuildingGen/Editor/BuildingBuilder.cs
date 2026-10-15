@@ -208,20 +208,24 @@ namespace Emadgh.BuildingGen.Editor
 
         private static void AddLoop(List<WallSegment> result, Vector2[] points, bool courtyard, string prefix)
         {
-            Vector2 centroid = Vector2.zero;
+            float signedArea = 0f;
             for (int i = 0; i < points.Length; i++)
-                centroid += points[i];
-            centroid /= points.Length;
+            {
+                Vector2 a = points[i];
+                Vector2 b = points[(i + 1) % points.Length];
+                signedArea += a.x * b.y - b.x * a.y;
+            }
+
+            bool counterClockwise = signedArea >= 0f;
 
             for (int i = 0; i < points.Length; i++)
             {
                 Vector2 a = points[i];
                 Vector2 b = points[(i + 1) % points.Length];
                 Vector2 direction = (b - a).normalized;
-                Vector2 normal = new Vector2(direction.y, -direction.x);
-                Vector2 midpoint = (a + b) * 0.5f;
-                Vector2 desired = courtyard ? centroid - midpoint : midpoint - centroid;
-                if (Vector2.Dot(normal, desired) < 0f)
+                Vector2 rightNormal = new Vector2(direction.y, -direction.x);
+                Vector2 normal = counterClockwise ? rightNormal : -rightNormal;
+                if (courtyard)
                     normal = -normal;
 
                 FacadeRole role = courtyard ? FacadeRole.Courtyard : ClassifyFacade(normal);
@@ -453,7 +457,9 @@ namespace Emadgh.BuildingGen.Editor
 
             float yJitter = generator.floorHeight * generator.sillJitter;
             float y = Mathf.Max(0f, baseY + Range(random, -yJitter, yJitter));
-            Vector3 worldPosition = wall.transform.TransformPoint(new Vector3(horizontal, y - generator.TotalHeight * 0.5f, 0f));
+            Vector3 worldPosition = wall.transform.position
+                                    + wall.transform.right.normalized * horizontal
+                                    + wall.transform.up.normalized * (y - generator.TotalHeight * 0.5f);
             instance.transform.position = worldPosition;
             instance.transform.rotation = wall.transform.rotation;
 
