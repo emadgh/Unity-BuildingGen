@@ -35,27 +35,43 @@ namespace Emadgh.BuildingGen.Editor
             if (!ProBuilderBooleanBackend.IsAvailable)
             {
                 EditorGUILayout.HelpBox(
-                    "CSG is currently unavailable. Install ProBuilder and enable Experimental Features in Edit > Preferences/Settings > ProBuilder. Prefabs/modules are still placed, but door/window/iwan cutters will not modify walls until CSG is active.",
+                    "CSG is currently unavailable. Install ProBuilder and enable Experimental Features in Edit > Preferences/Settings > ProBuilder. Prefabs/modules are still placed, but door/window/iwan/facade-bay cutters will not modify walls until CSG is active.",
                     MessageType.Warning);
             }
 
             if (generator.footprint == BuildingFootprint.Courtyard)
             {
                 EditorGUILayout.HelpBox(
-                    "Courtyard mode keeps the central court open. v0.3 can add courtyard-facing openings, repeated arcade bays, a recessed iwan, hashti/bent entrance route, badgir and roof-form modules.",
+                    "Courtyard mode keeps the central court open. It can add courtyard-facing bays, hashti/bent entrance route, badgir and roof-form modules.",
                     MessageType.Info);
+            }
+
+            if (generator.useFacadeBayPlanner)
+            {
+                if (generator.facadeBayCatalog == null)
+                {
+                    EditorGUILayout.HelpBox(
+                        "Facade Bay Planner is enabled but no FacadeBayCatalog is assigned.",
+                        MessageType.Warning);
+                }
+                else
+                {
+                    EditorGUILayout.HelpBox(
+                        "v0.5 reservation mode: Window / Door / Iwan / Arcade / Niche / Blank bays share one overlap map. Legacy random windows, iwan and courtyard arcade placement are bypassed during generation.",
+                        MessageType.Info);
+                }
             }
 
             using (new EditorGUILayout.HorizontalScope())
             {
                 if (GUILayout.Button("Generate"))
-                    BuildingBuilder.Generate(generator);
+                    GenerationCoordinator.Generate(generator);
 
                 if (GUILayout.Button("Randomize"))
                 {
                     Undo.RecordObject(generator, "Randomize building seed");
                     generator.seed = Random.Range(int.MinValue, int.MaxValue);
-                    BuildingBuilder.Generate(generator);
+                    GenerationCoordinator.Generate(generator);
                 }
             }
 
@@ -65,27 +81,27 @@ namespace Emadgh.BuildingGen.Editor
                 {
                     Undo.RecordObject(generator, "Previous building seed");
                     generator.DecrementSeed();
-                    BuildingBuilder.Generate(generator);
+                    GenerationCoordinator.Generate(generator);
                 }
 
                 if (GUILayout.Button("Seed >"))
                 {
                     Undo.RecordObject(generator, "Next building seed");
                     generator.IncrementSeed();
-                    BuildingBuilder.Generate(generator);
+                    GenerationCoordinator.Generate(generator);
                 }
             }
 
             using (new EditorGUILayout.HorizontalScope())
             {
                 if (GUILayout.Button("Clear Generated"))
-                    BuildingBuilder.Clear(generator);
+                    GenerationCoordinator.Clear(generator);
 
                 using (new EditorGUI.DisabledScope(generator.generatedRoot == null))
                 {
                     if (GUILayout.Button("Bake Copy"))
                     {
-                        GameObject baked = BuildingBuilder.BakeCopy(generator);
+                        GameObject baked = GenerationCoordinator.BakeCopy(generator);
                         if (baked != null)
                             Selection.activeGameObject = baked;
                     }
@@ -114,7 +130,7 @@ namespace Emadgh.BuildingGen.Editor
             }
 
             EditorUtility.SetDirty(generator);
-            BuildingBuilder.Generate(generator);
+            GenerationCoordinator.Generate(generator);
         }
 
         private static void ApplyTraditionalYazdPreset(BuildingGenerator generator)
@@ -139,7 +155,7 @@ namespace Emadgh.BuildingGen.Editor
             generator.maxRoofForms = Mathf.Max(1, generator.maxRoofForms);
 
             EditorUtility.SetDirty(generator);
-            BuildingBuilder.Generate(generator);
+            GenerationCoordinator.Generate(generator);
         }
     }
 }
