@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace Emadgh.BuildingGen.Editor
 {
@@ -24,8 +25,15 @@ namespace Emadgh.BuildingGen.Editor
 
     /// <summary>
     /// Produces the non-modular building body used by the v0.6 solid backend.
-    /// The output is one Mesh containing continuous perimeter wall solids plus the roof slab.
-    /// Facades are returned only as logical metadata for opening placement.
+    ///
+    /// The generated boundary is a hollow architectural shell:
+    /// - exterior facade surfaces run to the full building height,
+    /// - interior wall faces stop at the ceiling,
+    /// - a roof / ceiling closes the top volume,
+    /// - wall bottoms are closed at ground level.
+    ///
+    /// Rectangle, L, U and courtyard footprints are emitted into one Mesh.
+    /// Facades are returned only as non-rendered planning metadata.
     /// </summary>
     internal static class SolidBuildingMeshBuilder
     {
@@ -38,9 +46,17 @@ namespace Emadgh.BuildingGen.Editor
             public readonly List<int> wallTriangles = new List<int>();
             public readonly List<int> roofTriangles = new List<int>();
 
-            public void AddTriangle(Vector3 a, Vector3 b, Vector3 c, Vector3 desiredNormal, bool roof)
+            public void AddTriangle(
+                Vector3 a,
+                Vector3 b,
+                Vector3 c,
+                Vector3 desiredNormal,
+                bool roof)
             {
-                Vector3 normal = desiredNormal.sqrMagnitude > 0.0001f ? desiredNormal.normalized : Vector3.up;
+                Vector3 normal = desiredNormal.sqrMagnitude > 0.0001f
+                    ? desiredNormal.normalized
+                    : Vector3.up;
+
                 if (Vector3.Dot(Vector3.Cross(b - a, c - a), normal) < 0f)
                 {
                     Vector3 swap = b;
@@ -59,9 +75,17 @@ namespace Emadgh.BuildingGen.Editor
                 triangles.Add(baseIndex + 2);
             }
 
-            public void AddQuad(Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector3 desiredNormal, bool roof)
+            public void AddQuad(
+                Vector3 a,
+                Vector3 b,
+                Vector3 c,
+                Vector3 d,
+                Vector3 desiredNormal,
+                bool roof)
             {
-                Vector3 normal = desiredNormal.sqrMagnitude > 0.0001f ? desiredNormal.normalized : Vector3.up;
+                Vector3 normal = desiredNormal.sqrMagnitude > 0.0001f
+                    ? desiredNormal.normalized
+                    : Vector3.up;
 
                 Vector3 horizontal = b - a;
                 horizontal.y = 0f;
@@ -70,7 +94,10 @@ namespace Emadgh.BuildingGen.Editor
                     horizontal = d - a;
                     horizontal.y = 0f;
                 }
-                horizontal = horizontal.sqrMagnitude > 0.0001f ? horizontal.normalized : Vector3.right;
+
+                horizontal = horizontal.sqrMagnitude > 0.0001f
+                    ? horizontal.normalized
+                    : Vector3.right;
 
                 int baseIndex = vertices.Count;
                 AddVertex(a, normal, FaceUv(a, a, horizontal, normal));
@@ -80,6 +107,7 @@ namespace Emadgh.BuildingGen.Editor
 
                 List<int> triangles = roof ? roofTriangles : wallTriangles;
                 bool flip = Vector3.Dot(Vector3.Cross(b - a, c - a), normal) < 0f;
+
                 if (!flip)
                 {
                     triangles.Add(baseIndex);
@@ -100,40 +128,14 @@ namespace Emadgh.BuildingGen.Editor
                 }
             }
 
-            private void AddVertex(Vector3 position, Vector3 normal, Vector2 textureUv)
-            {
-                vertices.Add(position);
-                normals.Add(normal);
-                uv.Add(textureUv);
-                colors.Add(Color.white);
-            }
-
-            private static Vector2 FaceUv(Vector3 position, Vector3 origin, Vector3 horizontal, Vector3 normal)
-            {
-                const float scale = 0.5f;
-                if (Mathf.Abs(normal.y) > 0.75f)
-                    return new Vector2(position.x, position.z) * scale;
-
-                float u = Vector3.Dot(position - origin, horizontal);
-                return new Vector2(u, position.y) * scale;
-            }
-
-            private static Vector2 PlanarUv(Vector3 position, Vector3 normal)
-            {
-                const float scale = 0.5f;
-                if (Mathf.Abs(normal.y) > 0.75f)
-                    return new Vector2(position.x, position.z) * scale;
-
-                if (Mathf.Abs(normal.x) > Mathf.Abs(normal.z))
-                    return new Vector2(position.z, position.y) * scale;
-
-                return new Vector2(position.x, position.y) * scale;
-            }
-
             public Mesh ToMesh(string name)
             {
                 Mesh mesh = new Mesh();
                 mesh.name = name;
+
+                if (vertices.Count > 65535)
+                    mesh.indexFormat = IndexFormat.UInt32;
+
                 mesh.SetVertices(vertices);
                 mesh.SetNormals(normals);
                 mesh.SetUVs(0, uv);
@@ -144,9 +146,50 @@ namespace Emadgh.BuildingGen.Editor
                 mesh.RecalculateBounds();
                 return mesh;
             }
+
+            private void AddVertex(
+                Vector3 position,
+                Vector3 normal,
+                Vector2 textureUv)
+            {
+                vertices.Add(position);
+                normals.Add(normal);
+                uv.Add(textureUv);
+                colors.Add(Color.white);
+            }
+
+            private static Vector2 FaceUv(
+                Vector3 position,
+                Vector3 origin,
+                Vector3 horizontal,
+                Vector3 normal)
+            {
+                const float scale = 0.5f;
+
+                if (Mathf.Abs(normal.y) > 0.75f)
+                    return new Vector2(position.x, position.z) * scale;
+
+                float u = Vector3.Dot(position - origin, horizontal);
+                return new Vector2(u, position.y) * scale;
+            }
+
+            private static Vector2 PlanarUv(Vector3 position, Vector3 normal)
+            {
+                const float scale = 0.5f;
+
+                if (Mathf.Abs(normal.y) > 0.75f)
+                    return new Vector2(position.x, position.z) * scale;
+
+                if (Mathf.Abs(normal.x) > Mathf.Abs(normal.z))
+                    return new Vector2(position.z, position.y) * scale;
+
+                return new Vector2(position.x, position.y) * scale;
+            }
         }
 
-        public static Mesh Build(BuildingGenerator generator, out List<SolidFacadeDescriptor> facades)
+        public static Mesh Build(
+            BuildingGenerator generator,
+            out List<SolidFacadeDescriptor> facades)
         {
             facades = new List<SolidFacadeDescriptor>();
 
@@ -154,40 +197,55 @@ namespace Emadgh.BuildingGen.Editor
             EnsureCounterClockwise(outer);
 
             float totalHeight = Mathf.Max(0.2f, generator.TotalHeight);
-            bool generateRoof = generator.style != null && generator.style.generateFlatRoof;
+            bool generateRoof =
+                generator.style != null && generator.style.generateFlatRoof;
+
             float roofThickness = generateRoof
-                ? Mathf.Clamp(generator.style.roofThickness, 0.05f, Mathf.Max(0.05f, totalHeight * 0.35f))
+                ? Mathf.Clamp(
+                    generator.style.roofThickness,
+                    0.05f,
+                    Mathf.Max(0.05f, totalHeight * 0.35f))
                 : 0f;
-            float wallTop = generateRoof ? Mathf.Max(0.15f, totalHeight - roofThickness) : totalHeight;
+
+            float ceilingHeight = generateRoof
+                ? Mathf.Max(0.15f, totalHeight - roofThickness)
+                : totalHeight;
 
             MeshDraft draft = new MeshDraft();
 
-            List<Vector2> outerInner = OffsetPolygon(outer, generator.wallThickness);
-            BuildWallRing(
+            List<Vector2> outerRoomFace =
+                OffsetPolygon(outer, generator.wallThickness);
+
+            BuildWallShell(
                 draft,
                 outer,
-                outerInner,
+                outerRoomFace,
                 0f,
-                wallTop,
-                true,
+                totalHeight,
+                ceilingHeight,
                 !generateRoof,
                 false,
                 facades);
 
             List<Vector2> courtyard = null;
+            List<Vector2> courtyardRoomFace = null;
+
             if (generator.footprint == BuildingFootprint.Courtyard)
             {
                 courtyard = BuildCourtyardFootprint(generator);
                 EnsureCounterClockwise(courtyard);
 
-                List<Vector2> courtyardRoomFace = OffsetPolygon(courtyard, -generator.wallThickness);
-                BuildWallRing(
+                // Negative offset expands away from the courtyard void and into the room mass.
+                courtyardRoomFace =
+                    OffsetPolygon(courtyard, -generator.wallThickness);
+
+                BuildWallShell(
                     draft,
                     courtyard,
                     courtyardRoomFace,
                     0f,
-                    wallTop,
-                    true,
+                    totalHeight,
+                    ceilingHeight,
                     !generateRoof,
                     true,
                     facades);
@@ -195,21 +253,59 @@ namespace Emadgh.BuildingGen.Editor
 
             if (generateRoof)
             {
-                if (courtyard != null)
-                    AddRectangularRingPrism(draft, outer, courtyard, wallTop, totalHeight);
+                if (courtyard == null)
+                {
+                    // Exterior roof surface.
+                    AddPolygonCap(
+                        draft,
+                        outer,
+                        totalHeight,
+                        Vector3.up,
+                        true);
+
+                    // Interior ceiling surface. Together with the exterior roof this creates
+                    // a closed roof volume between ceilingHeight and totalHeight.
+                    AddPolygonCap(
+                        draft,
+                        outerRoomFace,
+                        ceilingHeight,
+                        Vector3.down,
+                        true);
+                }
                 else
-                    AddPolygonPrism(draft, outer, wallTop, totalHeight);
+                {
+                    // Courtyard remains open. The roof is an annulus between the outer
+                    // footprint and the courtyard void.
+                    AddRingSurface(
+                        draft,
+                        outer,
+                        courtyard,
+                        totalHeight,
+                        Vector3.up,
+                        true);
+
+                    AddRingSurface(
+                        draft,
+                        outerRoomFace,
+                        courtyardRoomFace,
+                        ceilingHeight,
+                        Vector3.down,
+                        true);
+                }
             }
 
-            Mesh mesh = draft.ToMesh("BuildingGen_SolidBuilding");
-            return mesh;
+            return draft.ToMesh("BuildingGen_SolidBuilding");
         }
 
-        internal static List<Vector2> BuildOuterFootprint(BuildingGenerator generator)
+        internal static List<Vector2> BuildOuterFootprint(
+            BuildingGenerator generator)
         {
             float hw = generator.width * 0.5f;
             float hd = generator.depth * 0.5f;
-            float wing = Mathf.Clamp(generator.wingWidth, 1.5f, Mathf.Min(generator.width, generator.depth) * 0.45f);
+            float wing = Mathf.Clamp(
+                generator.wingWidth,
+                1.5f,
+                Mathf.Min(generator.width, generator.depth) * 0.45f);
 
             if (generator.footprint == BuildingFootprint.LShape)
             {
@@ -226,8 +322,13 @@ namespace Emadgh.BuildingGen.Editor
 
             if (generator.footprint == BuildingFootprint.UShape)
             {
-                float recess = Mathf.Clamp(generator.uRecessDepth, 1.5f, generator.depth - generator.wallThickness * 4f);
+                float recess = Mathf.Clamp(
+                    generator.uRecessDepth,
+                    1.5f,
+                    generator.depth - generator.wallThickness * 4f);
+
                 float innerBackZ = hd - recess;
+
                 return new List<Vector2>
                 {
                     new Vector2(-hw, -hd),
@@ -250,10 +351,17 @@ namespace Emadgh.BuildingGen.Editor
             };
         }
 
-        internal static List<Vector2> BuildCourtyardFootprint(BuildingGenerator generator)
+        internal static List<Vector2> BuildCourtyardFootprint(
+            BuildingGenerator generator)
         {
-            float cw = Mathf.Min(generator.courtyardWidth, generator.width - generator.wallThickness * 6f);
-            float cd = Mathf.Min(generator.courtyardDepth, generator.depth - generator.wallThickness * 6f);
+            float cw = Mathf.Min(
+                generator.courtyardWidth,
+                generator.width - generator.wallThickness * 6f);
+
+            float cd = Mathf.Min(
+                generator.courtyardDepth,
+                generator.depth - generator.wallThickness * 6f);
+
             float hw = cw * 0.5f;
             float hd = cd * 0.5f;
 
@@ -266,10 +374,13 @@ namespace Emadgh.BuildingGen.Editor
             };
         }
 
-        internal static bool ContainsFootprintPoint(BuildingGenerator generator, Vector2 point)
+        internal static bool ContainsFootprintPoint(
+            BuildingGenerator generator,
+            Vector2 point)
         {
             List<Vector2> outer = BuildOuterFootprint(generator);
             EnsureCounterClockwise(outer);
+
             if (!PointInPolygon(point, outer))
                 return false;
 
@@ -277,6 +388,7 @@ namespace Emadgh.BuildingGen.Editor
             {
                 List<Vector2> courtyard = BuildCourtyardFootprint(generator);
                 EnsureCounterClockwise(courtyard);
+
                 if (PointInPolygon(point, courtyard))
                     return false;
             }
@@ -285,24 +397,29 @@ namespace Emadgh.BuildingGen.Editor
         }
 
         /// <summary>
-        /// Builds one closed perimeter wall solid between facadeLoop and roomLoop.
-        /// Both loops have the same point count and matching vertices.
+        /// Builds a closed wall band between a facade loop and the matching room-face loop.
+        /// Exterior facade and room-facing surfaces intentionally have different top heights
+        /// when a roof exists; the roof / ceiling caps close the remaining volume.
         /// </summary>
-        private static void BuildWallRing(
+        private static void BuildWallShell(
             MeshDraft draft,
             List<Vector2> facadeLoop,
             List<Vector2> roomLoop,
             float y0,
-            float y1,
-            bool capBottom,
+            float facadeTop,
+            float roomTop,
             bool capTop,
             bool courtyard,
             List<SolidFacadeDescriptor> facades)
         {
             int count = facadeLoop.Count;
+            if (roomLoop.Count != count)
+                return;
+
             for (int i = 0; i < count; i++)
             {
                 int next = (i + 1) % count;
+
                 Vector2 a2 = facadeLoop[i];
                 Vector2 b2 = facadeLoop[next];
                 Vector2 ia2 = roomLoop[i];
@@ -311,112 +428,136 @@ namespace Emadgh.BuildingGen.Editor
                 Vector2 direction = (b2 - a2).normalized;
                 Vector2 right = new Vector2(direction.y, -direction.x);
                 Vector2 outward = courtyard ? -right : right;
+                Vector3 facadeNormal = XzDirection(outward);
 
                 Vector3 a0 = Xz(a2, y0);
                 Vector3 b0 = Xz(b2, y0);
-                Vector3 b1 = Xz(b2, y1);
-                Vector3 a1 = Xz(a2, y1);
+                Vector3 aTop = Xz(a2, facadeTop);
+                Vector3 bTop = Xz(b2, facadeTop);
 
                 Vector3 ia0 = Xz(ia2, y0);
                 Vector3 ib0 = Xz(ib2, y0);
-                Vector3 ib1 = Xz(ib2, y1);
-                Vector3 ia1 = Xz(ia2, y1);
+                Vector3 iaTop = Xz(ia2, roomTop);
+                Vector3 ibTop = Xz(ib2, roomTop);
 
-                Vector3 facadeNormal = XzDirection(outward);
-                draft.AddQuad(a0, b0, b1, a1, facadeNormal, false);
-                draft.AddQuad(ib0, ia0, ia1, ib1, -facadeNormal, false);
+                // Street / courtyard-facing facade.
+                draft.AddQuad(
+                    a0,
+                    b0,
+                    bTop,
+                    aTop,
+                    facadeNormal,
+                    false);
 
-                if (capBottom)
-                    draft.AddQuad(a0, ia0, ib0, b0, Vector3.down, false);
+                // Room-facing wall surface.
+                draft.AddQuad(
+                    ib0,
+                    ia0,
+                    iaTop,
+                    ibTop,
+                    -facadeNormal,
+                    false);
+
+                // Ground-level wall thickness closure.
+                draft.AddQuad(
+                    a0,
+                    ia0,
+                    ib0,
+                    b0,
+                    Vector3.down,
+                    false);
+
                 if (capTop)
-                    draft.AddQuad(a1, b1, ib1, ia1, Vector3.up, false);
+                {
+                    draft.AddQuad(
+                        aTop,
+                        bTop,
+                        ibTop,
+                        iaTop,
+                        Vector3.up,
+                        false);
+                }
 
                 facades.Add(new SolidFacadeDescriptor
                 {
                     start = a2,
                     end = b2,
                     outward = outward,
-                    role = courtyard ? SolidFacadeRole.Courtyard : ClassifyFacade(outward),
+                    role = courtyard
+                        ? SolidFacadeRole.Courtyard
+                        : ClassifyFacade(outward),
                     courtyard = courtyard
                 });
             }
         }
 
-        private static void AddPolygonPrism(MeshDraft draft, List<Vector2> polygon, float y0, float y1)
+        private static void AddPolygonCap(
+            MeshDraft draft,
+            List<Vector2> polygon,
+            float y,
+            Vector3 normal,
+            bool roof)
         {
             List<int> triangles = TriangulatePolygon(polygon);
+
             for (int i = 0; i < triangles.Count; i += 3)
             {
                 Vector2 a = polygon[triangles[i]];
                 Vector2 b = polygon[triangles[i + 1]];
                 Vector2 c = polygon[triangles[i + 2]];
 
-                draft.AddTriangle(Xz(a, y1), Xz(b, y1), Xz(c, y1), Vector3.up, true);
-                draft.AddTriangle(Xz(a, y0), Xz(c, y0), Xz(b, y0), Vector3.down, true);
-            }
-
-            for (int i = 0; i < polygon.Count; i++)
-            {
-                int next = (i + 1) % polygon.Count;
-                Vector2 a2 = polygon[i];
-                Vector2 b2 = polygon[next];
-                Vector2 dir = (b2 - a2).normalized;
-                Vector2 outward = new Vector2(dir.y, -dir.x);
-
-                draft.AddQuad(
-                    Xz(a2, y0),
-                    Xz(b2, y0),
-                    Xz(b2, y1),
-                    Xz(a2, y1),
-                    XzDirection(outward),
-                    false);
+                draft.AddTriangle(
+                    Xz(a, y),
+                    Xz(b, y),
+                    Xz(c, y),
+                    normal,
+                    roof);
             }
         }
 
-        private static void AddRectangularRingPrism(
+        /// <summary>
+        /// Adds a horizontal ring between two matching CCW loops.
+        /// Current courtyard generation uses aligned four-sided loops, but the implementation
+        /// also supports any pair with equal vertex counts and matching vertex order.
+        /// </summary>
+        private static void AddRingSurface(
             MeshDraft draft,
             List<Vector2> outer,
             List<Vector2> inner,
-            float y0,
-            float y1)
+            float y,
+            Vector3 normal,
+            bool roof)
         {
-            if (outer.Count != 4 || inner.Count != 4)
+            if (outer == null
+                || inner == null
+                || outer.Count < 3
+                || outer.Count != inner.Count)
             {
-                AddPolygonPrism(draft, outer, y0, y1);
                 return;
             }
 
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < outer.Count; i++)
             {
-                int next = (i + 1) % 4;
+                int next = (i + 1) % outer.Count;
 
-                Vector3 oa0 = Xz(outer[i], y0);
-                Vector3 ob0 = Xz(outer[next], y0);
-                Vector3 ob1 = Xz(outer[next], y1);
-                Vector3 oa1 = Xz(outer[i], y1);
-
-                Vector3 ia0 = Xz(inner[i], y0);
-                Vector3 ib0 = Xz(inner[next], y0);
-                Vector3 ib1 = Xz(inner[next], y1);
-                Vector3 ia1 = Xz(inner[i], y1);
-
-                Vector2 outerDir = (outer[next] - outer[i]).normalized;
-                Vector2 outerNormal = new Vector2(outerDir.y, -outerDir.x);
-                Vector2 innerDir = (inner[next] - inner[i]).normalized;
-                Vector2 courtyardNormal = new Vector2(-innerDir.y, innerDir.x);
-
-                draft.AddQuad(oa1, ob1, ib1, ia1, Vector3.up, true);
-                draft.AddQuad(oa0, ia0, ib0, ob0, Vector3.down, true);
-                draft.AddQuad(oa0, ob0, ob1, oa1, XzDirection(outerNormal), false);
-                draft.AddQuad(ib0, ia0, ia1, ib1, XzDirection(courtyardNormal), false);
+                draft.AddQuad(
+                    Xz(outer[i], y),
+                    Xz(outer[next], y),
+                    Xz(inner[next], y),
+                    Xz(inner[i], y),
+                    normal,
+                    roof);
             }
         }
 
         /// <summary>
         /// Positive distance offsets a CCW polygon inward. Negative values expand it.
-        /// This mitered line-intersection offset is appropriate for the orthogonal footprints used by BuildingGen.
+        /// This mitered line-intersection offset is intended for BuildingGen's orthogonal
+        /// rectangle / L / U / courtyard footprints.
         /// </summary>
-        private static List<Vector2> OffsetPolygon(List<Vector2> polygon, float distance)
+        private static List<Vector2> OffsetPolygon(
+            List<Vector2> polygon,
+            float distance)
         {
             List<Vector2> result = new List<Vector2>(polygon.Count);
             float area = SignedArea(polygon);
@@ -424,23 +565,38 @@ namespace Emadgh.BuildingGen.Editor
 
             for (int i = 0; i < polygon.Count; i++)
             {
-                Vector2 previous = polygon[(i - 1 + polygon.Count) % polygon.Count];
+                Vector2 previous =
+                    polygon[(i - 1 + polygon.Count) % polygon.Count];
                 Vector2 current = polygon[i];
                 Vector2 next = polygon[(i + 1) % polygon.Count];
 
-                Vector2 prevDir = (current - previous).normalized;
-                Vector2 nextDir = (next - current).normalized;
+                Vector2 previousDirection =
+                    (current - previous).normalized;
+                Vector2 nextDirection =
+                    (next - current).normalized;
 
-                Vector2 prevLeft = new Vector2(-prevDir.y, prevDir.x) * orientation;
-                Vector2 nextLeft = new Vector2(-nextDir.y, nextDir.x) * orientation;
+                Vector2 previousLeft =
+                    new Vector2(-previousDirection.y, previousDirection.x)
+                    * orientation;
 
-                Vector2 p1 = current + prevLeft * distance;
+                Vector2 nextLeft =
+                    new Vector2(-nextDirection.y, nextDirection.x)
+                    * orientation;
+
+                Vector2 p1 = current + previousLeft * distance;
                 Vector2 p2 = current + nextLeft * distance;
 
                 Vector2 intersection;
-                if (TryLineIntersection(p1, prevDir, p2, nextDir, out intersection))
+                if (TryLineIntersection(
+                        p1,
+                        previousDirection,
+                        p2,
+                        nextDirection,
+                        out intersection))
                 {
-                    float maxMiter = Mathf.Max(Mathf.Abs(distance) * 8f, 0.25f);
+                    float maxMiter =
+                        Mathf.Max(Mathf.Abs(distance) * 8f, 0.25f);
+
                     if ((intersection - current).magnitude <= maxMiter)
                     {
                         result.Add(intersection);
@@ -448,9 +604,10 @@ namespace Emadgh.BuildingGen.Editor
                     }
                 }
 
-                Vector2 average = prevLeft + nextLeft;
+                Vector2 average = previousLeft + nextLeft;
                 if (average.sqrMagnitude < 0.0001f)
                     average = nextLeft;
+
                 average.Normalize();
                 result.Add(current + average * distance);
             }
@@ -484,8 +641,9 @@ namespace Emadgh.BuildingGen.Editor
                 return result;
 
             List<int> indices = new List<int>();
-            bool ccw = SignedArea(polygon) >= 0f;
-            if (ccw)
+            bool counterClockwise = SignedArea(polygon) >= 0f;
+
+            if (counterClockwise)
             {
                 for (int i = 0; i < polygon.Count; i++)
                     indices.Add(i);
@@ -497,16 +655,19 @@ namespace Emadgh.BuildingGen.Editor
             }
 
             int guard = polygon.Count * polygon.Count;
+
             while (indices.Count > 3 && guard-- > 0)
             {
                 bool clipped = false;
+
                 for (int i = 0; i < indices.Count; i++)
                 {
-                    int prev = indices[(i - 1 + indices.Count) % indices.Count];
+                    int previous =
+                        indices[(i - 1 + indices.Count) % indices.Count];
                     int current = indices[i];
                     int next = indices[(i + 1) % indices.Count];
 
-                    Vector2 a = polygon[prev];
+                    Vector2 a = polygon[previous];
                     Vector2 b = polygon[current];
                     Vector2 c = polygon[next];
 
@@ -517,8 +678,12 @@ namespace Emadgh.BuildingGen.Editor
                     for (int j = 0; j < indices.Count; j++)
                     {
                         int test = indices[j];
-                        if (test == prev || test == current || test == next)
+                        if (test == previous
+                            || test == current
+                            || test == next)
+                        {
                             continue;
+                        }
 
                         if (PointInTriangle(polygon[test], a, b, c))
                         {
@@ -530,7 +695,7 @@ namespace Emadgh.BuildingGen.Editor
                     if (containsPoint)
                         continue;
 
-                    result.Add(prev);
+                    result.Add(previous);
                     result.Add(current);
                     result.Add(next);
                     indices.RemoveAt(i);
@@ -552,23 +717,39 @@ namespace Emadgh.BuildingGen.Editor
             return result;
         }
 
-        private static bool PointInPolygon(Vector2 point, List<Vector2> polygon)
+        private static bool PointInPolygon(
+            Vector2 point,
+            List<Vector2> polygon)
         {
             bool inside = false;
-            for (int i = 0, j = polygon.Count - 1; i < polygon.Count; j = i++)
+
+            for (int i = 0, j = polygon.Count - 1;
+                 i < polygon.Count;
+                 j = i++)
             {
                 Vector2 pi = polygon[i];
                 Vector2 pj = polygon[j];
-                bool crosses = ((pi.y > point.y) != (pj.y > point.y))
-                    && (point.x < (pj.x - pi.x) * (point.y - pi.y)
-                        / (pj.y - pi.y) + pi.x);
+
+                bool crosses =
+                    ((pi.y > point.y) != (pj.y > point.y))
+                    && (point.x
+                        < (pj.x - pi.x)
+                        * (point.y - pi.y)
+                        / (pj.y - pi.y)
+                        + pi.x);
+
                 if (crosses)
                     inside = !inside;
             }
+
             return inside;
         }
 
-        private static bool PointInTriangle(Vector2 p, Vector2 a, Vector2 b, Vector2 c)
+        private static bool PointInTriangle(
+            Vector2 p,
+            Vector2 a,
+            Vector2 b,
+            Vector2 c)
         {
             float c1 = Cross(b - a, p - a);
             float c2 = Cross(c - b, p - b);
@@ -581,8 +762,10 @@ namespace Emadgh.BuildingGen.Editor
         {
             if (outward.y > 0.55f)
                 return SolidFacadeRole.Front;
+
             if (outward.y < -0.55f)
                 return SolidFacadeRole.Back;
+
             return SolidFacadeRole.Side;
         }
 
@@ -595,12 +778,14 @@ namespace Emadgh.BuildingGen.Editor
         private static float SignedArea(List<Vector2> polygon)
         {
             float area = 0f;
+
             for (int i = 0; i < polygon.Count; i++)
             {
                 Vector2 a = polygon[i];
                 Vector2 b = polygon[(i + 1) % polygon.Count];
                 area += a.x * b.y - b.x * a.y;
             }
+
             return area * 0.5f;
         }
 
