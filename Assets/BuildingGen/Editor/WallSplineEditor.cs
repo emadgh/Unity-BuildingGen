@@ -25,7 +25,7 @@ namespace Emadgh.BuildingGen.Editor
 
             EditorGUILayout.Space(8f);
             EditorGUILayout.HelpBox(
-                "Scene editing: drag the point handles. Hold Shift and left-click on the ground plane to append a new point. The path is stored in local space.",
+                "Scene editing: drag point handles. Shift + left-click appends a point. Gate markers use distance along the spline and stay meaningful when the path changes.",
                 MessageType.Info);
 
             EditorGUILayout.LabelField("Spline Editing", EditorStyles.boldLabel);
@@ -37,6 +37,20 @@ namespace Emadgh.BuildingGen.Editor
                     RemoveLastPoint(spline);
                 if (GUILayout.Button("Reverse"))
                     ReversePoints(spline);
+            }
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (GUILayout.Button("Add Gate Marker"))
+                    AddGateMarker(spline);
+
+                if (GUILayout.Button("Conform + Generate"))
+                {
+                    Undo.RecordObject(spline, "Enable wall terrain conform");
+                    spline.conformToTerrain = true;
+                    EditorUtility.SetDirty(spline);
+                    WallSplineBuilder.Generate(spline);
+                }
             }
 
             EditorGUILayout.Space(8f);
@@ -84,6 +98,7 @@ namespace Emadgh.BuildingGen.Editor
                 return;
 
             DrawPath(spline);
+            DrawOpeningGuides(spline);
             HandlePoints(spline);
             HandleShiftClickAppend(spline);
         }
@@ -94,12 +109,43 @@ namespace Emadgh.BuildingGen.Editor
             if (sampled.Count < 2)
                 return;
 
-            Handles.color = new Color(0.95f, 0.65f, 0.12f, 1f);
+            Handles.color = spline.conformToTerrain
+                ? new Color(0.35f, 0.85f, 0.45f, 1f)
+                : new Color(0.95f, 0.65f, 0.12f, 1f);
+
             for (int i = 0; i < sampled.Count - 1; i++)
             {
                 Vector3 a = spline.transform.TransformPoint(sampled[i]);
                 Vector3 b = spline.transform.TransformPoint(sampled[i + 1]);
                 Handles.DrawAAPolyLine(4f, a, b);
+            }
+        }
+
+        private static void DrawOpeningGuides(WallSpline spline)
+        {
+            if (!spline.showOpeningGuides || spline.openings == null)
+                return;
+
+            for (int i = 0; i < spline.openings.Count; i++)
+            {
+                WallSplineOpening opening = spline.openings[i];
+                if (opening == null || !opening.enabled)
+                    continue;
+
+                Vector3 localPosition;
+                Vector3 localTangent;
+                if (!WallSplineBuilder.EvaluateSplineAtDistance(spline, opening.distance, out localPosition, out localTangent))
+                    continue;
+
+                Vector3 worldPosition = spline.transform.TransformPoint(localPosition);
+                Vector3 worldTangent = spline.transform.TransformDirection(localTangent).normalized;
+                Vector3 side = Vector3.Cross(Vector3.up, worldTangent).normalized;
+                float half = opening.width * 0.5f;
+
+                Handles.color = new Color(0.95f, 0.2f, 0.15f, 1f);
+                Handles.DrawAAPolyLine(5f, worldPosition - worldTangent * half, worldPosition + worldTangent * half);
+                Handles.DrawLine(worldPosition, worldPosition + Vector3.up * 2.2f);
+                Handles.Label(worldPosition + Vector3.up * 2.35f + side * 0.1f, "Gate " + i + "  " + opening.width.ToString("0.00") + "m");
             }
         }
 
@@ -159,6 +205,21 @@ namespace Emadgh.BuildingGen.Editor
             current.Use();
         }
 
+        private static void AddGateMarker(WallSpline spline)
+        {
+            Undo.RecordObject(spline, "Add wall gate marker");
+            float length = WallSplineBuilder.GetPathLength(spline);
+            WallSplineOpening opening = new WallSplineOpening
+            {
+                enabled = true,
+                distance = length * 0.5f,
+                width = 1.8f
+            };
+            spline.openings.Add(opening);
+            EditorUtility.SetDirty(spline);
+            WallSplineBuilder.Generate(spline);
+        }
+
         private static void AddPoint(WallSpline spline)
         {
             Undo.RecordObject(spline, "Add wall spline point");
@@ -195,8 +256,20 @@ namespace Emadgh.BuildingGen.Editor
 
         private static void ReversePoints(WallSpline spline)
         {
+            float length = WallSplineBuilder.GetPathLength(spline);
             Undo.RecordObject(spline, "Reverse wall spline");
             spline.controlPoints.Reverse();
+
+            if (spline.openings != null)
+            {
+                for (int i = 0; i < spline.openings.Count; i++)
+                {
+                    WallSplineOpening opening = spline.openings[i];
+                    if (opening != null)
+                        opening.distance = Mathf.Max(0f, length - opening.distance);
+                }
+            }
+
             EditorUtility.SetDirty(spline);
             WallSplineBuilder.Generate(spline);
         }
