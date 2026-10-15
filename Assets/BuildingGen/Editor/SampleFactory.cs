@@ -38,6 +38,9 @@ namespace Emadgh.BuildingGen.Editor
 
             GameObject iwan = CreateIwanPrefab(mud, dark);
             GameObject badgir = CreateBadgirPrefab(mud, dark);
+            GameObject arcade = CreateArcadePrefab(mud, dark);
+            GameObject dome = CreateDomePrefab(mud);
+            GameObject vault = CreateVaultPrefab(mud);
 
             string stylePath = SampleRoot + "/YazdStyle_Simple.asset";
             YazdBuildingStyle style = AssetDatabase.LoadAssetAtPath<YazdBuildingStyle>(stylePath);
@@ -53,16 +56,24 @@ namespace Emadgh.BuildingGen.Editor
             style.windowPrefabs.Clear();
             style.iwanPrefabs.Clear();
             style.badgirPrefabs.Clear();
+            style.arcadePrefabs.Clear();
+            style.domePrefabs.Clear();
+            style.vaultPrefabs.Clear();
             style.doorPrefabs.Add(archDoor);
             style.windowPrefabs.Add(archWindow);
             style.iwanPrefabs.Add(iwan);
             style.badgirPrefabs.Add(badgir);
+            style.arcadePrefabs.Add(arcade);
+            style.domePrefabs.Add(dome);
+            style.vaultPrefabs.Add(vault);
             style.frontWindowChance = 1f;
             style.backWindowChance = 0.25f;
             style.sideWindowChance = 0.25f;
             style.courtyardWindowChance = 0.95f;
             style.centeredDoorChance = 0.78f;
             style.iwanChance = 0.85f;
+            style.arcadeSideChance = 0.9f;
+            style.arcadeBayChance = 0.95f;
             style.badgirChance = 0.9f;
             style.generateFlatRoof = true;
             style.generateParapet = true;
@@ -88,11 +99,24 @@ namespace Emadgh.BuildingGen.Editor
             generator.windowsPerFloor = new Vector2Int(1, 3);
             generator.generateSideOpenings = false;
             generator.generateCourtyardOpenings = true;
+            generator.generateCourtyardArcade = true;
+            generator.arcadeBayWidth = 2.1f;
+            generator.arcadeDepth = 0.72f;
             generator.recessedEntrance = true;
             generator.entranceRecess = 0.42f;
+            generator.generateHashtiAndCorridor = true;
+            generator.hashtiSize = 2.7f;
+            generator.entranceCorridorLength = 2.6f;
+            generator.entranceCorridorWidth = 1.2f;
+            generator.entranceTurnLength = 2.3f;
+            generator.entranceTurn = EntranceTurnDirection.Auto;
             generator.generateIwan = true;
+            generator.cutIwanRecess = true;
             generator.generateBadgir = true;
             generator.badgirCount = 1;
+            generator.generateRoofForms = true;
+            generator.maxRoofForms = 2;
+            generator.roofFormChance = 0.7f;
             generator.seed = 1403;
 
             BuildingBuilder.Generate(generator);
@@ -100,7 +124,7 @@ namespace Emadgh.BuildingGen.Editor
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
-            Debug.Log("BuildingGen: Yazd courtyard demo created. Try the footprint preset buttons and change Seed on YazdBuilding_Demo.", go);
+            Debug.Log("BuildingGen: v0.3 Yazd demo created with courtyard arcade, hashti corridor, iwan CSG and roof forms. Change Seed on YazdBuilding_Demo.", go);
         }
 
         private static GameObject CreateOpeningPrefab(
@@ -160,21 +184,7 @@ namespace Emadgh.BuildingGen.Editor
                     new Vector3(width * 0.82f, 0.055f, 0.06f), wood);
             }
 
-            GameObject cutter = new GameObject("Cutter");
-            cutter.transform.SetParent(root.transform, false);
-            MeshFilter cutterFilter = cutter.AddComponent<MeshFilter>();
-            MeshRenderer cutterRenderer = cutter.AddComponent<MeshRenderer>();
-            cutterRenderer.sharedMaterial = mud;
-            cutterRenderer.enabled = false;
-
-            string meshPath = SampleRoot + "/" + name + "_Cutter.asset";
-            Mesh existingMesh = AssetDatabase.LoadAssetAtPath<Mesh>(meshPath);
-            if (existingMesh != null)
-                AssetDatabase.DeleteAsset(meshPath);
-
-            Mesh cutterMesh = EditorMeshFactory.CreateArchPrism(width, height, 1.2f, 12);
-            AssetDatabase.CreateAsset(cutterMesh, meshPath);
-            cutterFilter.sharedMesh = cutterMesh;
+            GameObject cutter = CreateArchCutter(name + "_Cutter", root.transform, width, height, 1.2f, mud);
             definition.cutterRoot = cutter.transform;
 
             GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, prefabPath);
@@ -193,20 +203,26 @@ namespace Emadgh.BuildingGen.Editor
             YazdModuleDefinition definition = root.AddComponent<YazdModuleDefinition>();
             definition.kind = YazdModuleKind.Iwan;
             definition.nominalWidth = 2.8f;
-            definition.nominalDepth = 0.75f;
+            definition.nominalDepth = 1.25f;
             definition.nominalHeight = 3.4f;
             definition.selectionWeight = 1f;
+            definition.cutHostSurface = true;
 
             Transform visual = new GameObject("Visual").transform;
             visual.SetParent(root.transform, false);
+            definition.visualRoot = visual;
 
             float width = 2.8f;
             float height = 3.4f;
             float frame = 0.22f;
-            CreateVisualCube("IwanShadow", visual, new Vector3(0f, height * 0.46f, -0.18f), new Vector3(width * 0.82f, height * 0.84f, 0.08f), dark);
-            CreateVisualCube("Pier_L", visual, new Vector3(-width * 0.5f, height * 0.5f, 0f), new Vector3(frame, height, 0.72f), mud);
-            CreateVisualCube("Pier_R", visual, new Vector3(width * 0.5f, height * 0.5f, 0f), new Vector3(frame, height, 0.72f), mud);
-            CreateArchTrim(visual, width, height, frame, 0.72f, mud);
+            CreateVisualCube("IwanShadow", visual, new Vector3(0f, height * 0.46f, -0.62f), new Vector3(width * 0.82f, height * 0.84f, 0.08f), dark);
+            CreateVisualCube("Pier_L", visual, new Vector3(-width * 0.5f, height * 0.5f, -0.22f), new Vector3(frame, height, 1.15f), mud);
+            CreateVisualCube("Pier_R", visual, new Vector3(width * 0.5f, height * 0.5f, -0.22f), new Vector3(frame, height, 1.15f), mud);
+            visual.localPosition = Vector3.zero;
+            CreateArchTrim(visual, width, height, frame, 1.15f, mud);
+
+            GameObject cutter = CreateArchCutter(name + "_RecessCutter", root.transform, 2.35f, 3.12f, 2.2f, mud);
+            definition.cutterRoot = cutter.transform;
 
             GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, path);
             Object.DestroyImmediate(root);
@@ -230,6 +246,7 @@ namespace Emadgh.BuildingGen.Editor
 
             Transform visual = new GameObject("Visual").transform;
             visual.SetParent(root.transform, false);
+            definition.visualRoot = visual;
 
             CreateVisualCube("Tower", visual, new Vector3(0f, 1.65f, 0f), new Vector3(1.55f, 3.3f, 1.55f), mud);
             CreateVisualCube("TopCap", visual, new Vector3(0f, 3.42f, 0f), new Vector3(1.78f, 0.22f, 1.78f), mud);
@@ -243,6 +260,143 @@ namespace Emadgh.BuildingGen.Editor
             GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, path);
             Object.DestroyImmediate(root);
             return prefab;
+        }
+
+        private static GameObject CreateArcadePrefab(Material mud, Material dark)
+        {
+            const string name = "PF_ArcadeBay_Simple";
+            string path = SampleRoot + "/" + name + ".prefab";
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(path) != null)
+                AssetDatabase.DeleteAsset(path);
+
+            GameObject root = new GameObject(name);
+            YazdModuleDefinition definition = root.AddComponent<YazdModuleDefinition>();
+            definition.kind = YazdModuleKind.ArcadeBay;
+            definition.nominalWidth = 2.15f;
+            definition.nominalDepth = 0.65f;
+            definition.nominalHeight = 2.7f;
+            definition.edgeClearance = 0.08f;
+
+            Transform visual = new GameObject("Visual").transform;
+            visual.SetParent(root.transform, false);
+            visual.localPosition = new Vector3(0f, 0f, 0.28f);
+            definition.visualRoot = visual;
+
+            float width = 2.05f;
+            float height = 2.65f;
+            float frame = 0.17f;
+            CreateVisualCube("ArcadeShadow", visual, new Vector3(0f, 1.15f, -0.04f), new Vector3(width * 0.80f, 2.05f, 0.05f), dark);
+            CreateVisualCube("Pier_L", visual, new Vector3(-width * 0.5f, height * 0.5f, 0f), new Vector3(frame, height, 0.55f), mud);
+            CreateVisualCube("Pier_R", visual, new Vector3(width * 0.5f, height * 0.5f, 0f), new Vector3(frame, height, 0.55f), mud);
+            CreateArchTrim(visual, width, height, frame, 0.55f, mud);
+
+            GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, path);
+            Object.DestroyImmediate(root);
+            return prefab;
+        }
+
+        private static GameObject CreateDomePrefab(Material mud)
+        {
+            const string name = "PF_Dome_Simple";
+            string path = SampleRoot + "/" + name + ".prefab";
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(path) != null)
+                AssetDatabase.DeleteAsset(path);
+
+            GameObject root = new GameObject(name);
+            YazdModuleDefinition definition = root.AddComponent<YazdModuleDefinition>();
+            definition.kind = YazdModuleKind.Dome;
+            definition.nominalWidth = 2.6f;
+            definition.nominalDepth = 2.6f;
+            definition.nominalHeight = 1.45f;
+            definition.edgeClearance = 0.45f;
+
+            Transform visual = new GameObject("Visual").transform;
+            visual.SetParent(root.transform, false);
+            definition.visualRoot = visual;
+
+            CreateVisualCube("DomeDrum", visual, new Vector3(0f, 0.16f, 0f), new Vector3(2.25f, 0.32f, 2.25f), mud);
+            GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            sphere.name = "DomeShell_Placeholder";
+            sphere.transform.SetParent(visual, false);
+            sphere.transform.localPosition = new Vector3(0f, 0.82f, 0f);
+            sphere.transform.localScale = new Vector3(2.55f, 1.30f, 2.55f);
+            Collider collider = sphere.GetComponent<Collider>();
+            if (collider != null)
+                Object.DestroyImmediate(collider);
+            MeshRenderer renderer = sphere.GetComponent<MeshRenderer>();
+            if (renderer != null)
+                renderer.sharedMaterial = mud;
+
+            GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, path);
+            Object.DestroyImmediate(root);
+            return prefab;
+        }
+
+        private static GameObject CreateVaultPrefab(Material mud)
+        {
+            const string name = "PF_BarrelVault_Simple";
+            string path = SampleRoot + "/" + name + ".prefab";
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(path) != null)
+                AssetDatabase.DeleteAsset(path);
+
+            GameObject root = new GameObject(name);
+            YazdModuleDefinition definition = root.AddComponent<YazdModuleDefinition>();
+            definition.kind = YazdModuleKind.BarrelVault;
+            definition.nominalWidth = 2.7f;
+            definition.nominalDepth = 3.4f;
+            definition.nominalHeight = 1.7f;
+            definition.edgeClearance = 0.4f;
+
+            Transform visual = new GameObject("Visual").transform;
+            visual.SetParent(root.transform, false);
+            definition.visualRoot = visual;
+
+            string meshPath = SampleRoot + "/" + name + "_Mesh.asset";
+            Mesh oldMesh = AssetDatabase.LoadAssetAtPath<Mesh>(meshPath);
+            if (oldMesh != null)
+                AssetDatabase.DeleteAsset(meshPath);
+
+            Mesh mesh = EditorMeshFactory.CreateArchPrism(2.7f, 1.7f, 3.4f, 14);
+            mesh.name = name + "_Mesh";
+            AssetDatabase.CreateAsset(mesh, meshPath);
+
+            GameObject shell = new GameObject("VaultMass_Placeholder");
+            shell.transform.SetParent(visual, false);
+            MeshFilter filter = shell.AddComponent<MeshFilter>();
+            filter.sharedMesh = mesh;
+            MeshRenderer renderer = shell.AddComponent<MeshRenderer>();
+            renderer.sharedMaterial = mud;
+
+            GameObject prefab = PrefabUtility.SaveAsPrefabAsset(root, path);
+            Object.DestroyImmediate(root);
+            return prefab;
+        }
+
+        private static GameObject CreateArchCutter(
+            string assetStem,
+            Transform parent,
+            float width,
+            float height,
+            float depth,
+            Material material)
+        {
+            GameObject cutter = new GameObject("Cutter");
+            cutter.transform.SetParent(parent, false);
+            MeshFilter cutterFilter = cutter.AddComponent<MeshFilter>();
+            MeshRenderer cutterRenderer = cutter.AddComponent<MeshRenderer>();
+            cutterRenderer.sharedMaterial = material;
+            cutterRenderer.enabled = false;
+
+            string meshPath = SampleRoot + "/" + assetStem + ".asset";
+            Mesh existingMesh = AssetDatabase.LoadAssetAtPath<Mesh>(meshPath);
+            if (existingMesh != null)
+                AssetDatabase.DeleteAsset(meshPath);
+
+            Mesh cutterMesh = EditorMeshFactory.CreateArchPrism(width, height, depth, 14);
+            cutterMesh.name = assetStem;
+            AssetDatabase.CreateAsset(cutterMesh, meshPath);
+            cutterFilter.sharedMesh = cutterMesh;
+            return cutter;
         }
 
         private static void CreateArchTrim(
