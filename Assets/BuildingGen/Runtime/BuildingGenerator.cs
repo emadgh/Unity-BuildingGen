@@ -10,6 +10,13 @@ namespace Emadgh.BuildingGen
         Courtyard
     }
 
+    public enum EntranceTurnDirection
+    {
+        Auto,
+        Left,
+        Right
+    }
+
     /// <summary>
     /// Scene component that stores deterministic building-generation settings.
     /// Geometry is generated from the custom inspector in edit mode.
@@ -40,6 +47,9 @@ namespace Emadgh.BuildingGen
         [Min(2f)] public float courtyardWidth = 4.5f;
         [Min(2f)] public float courtyardDepth = 3.8f;
         public bool generateCourtyardOpenings = true;
+        public bool generateCourtyardArcade = true;
+        [Min(1.2f)] public float arcadeBayWidth = 2.2f;
+        [Min(0.25f)] public float arcadeDepth = 0.8f;
 
         [Header("Openings")]
         public Vector2Int windowsPerFloor = new Vector2Int(2, 4);
@@ -50,10 +60,26 @@ namespace Emadgh.BuildingGen
         public bool recessedEntrance = true;
         [Range(0f, 1.2f)] public float entranceRecess = 0.35f;
 
+        [Header("Entrance Sequence")]
+        [Tooltip("Create a simple hashti + bent corridor guide behind the generated entrance. It is intentionally simple so production prefabs can replace it later.")]
+        public bool generateHashtiAndCorridor = true;
+        [Min(1.6f)] public float hashtiSize = 2.6f;
+        [Min(1f)] public float entranceCorridorLength = 2.8f;
+        [Min(0.8f)] public float entranceCorridorWidth = 1.25f;
+        [Min(1f)] public float entranceTurnLength = 2.4f;
+        public EntranceTurnDirection entranceTurn = EntranceTurnDirection.Auto;
+
         [Header("Yazd Modules")]
         public bool generateIwan = true;
+        [Tooltip("If an iwan prefab contains a Cutter root, subtract it from the host wall before hiding the cutter.")]
+        public bool cutIwanRecess = true;
         public bool generateBadgir = true;
         [Range(0, 3)] public int badgirCount = 1;
+
+        [Header("Roof Forms")]
+        public bool generateRoofForms = true;
+        [Range(0, 4)] public int maxRoofForms = 2;
+        [Range(0f, 1f)] public float roofFormChance = 0.55f;
 
         [Header("Variation")]
         [Range(0f, 0.35f)] public float horizontalJitter = 0.08f;
@@ -88,6 +114,13 @@ namespace Emadgh.BuildingGen
             float maxCourtyardDepth = Mathf.Max(2f, depth - wallThickness * 6f);
             courtyardWidth = Mathf.Clamp(courtyardWidth, 2f, maxCourtyardWidth);
             courtyardDepth = Mathf.Clamp(courtyardDepth, 2f, maxCourtyardDepth);
+
+            arcadeBayWidth = Mathf.Max(1.2f, arcadeBayWidth);
+            arcadeDepth = Mathf.Max(0.25f, arcadeDepth);
+            hashtiSize = Mathf.Max(1.6f, hashtiSize);
+            entranceCorridorWidth = Mathf.Clamp(entranceCorridorWidth, 0.8f, hashtiSize * 0.8f);
+            entranceCorridorLength = Mathf.Max(1f, entranceCorridorLength);
+            entranceTurnLength = Mathf.Max(1f, entranceTurnLength);
         }
     }
 }
