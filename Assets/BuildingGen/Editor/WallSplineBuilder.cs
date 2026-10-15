@@ -175,7 +175,7 @@ namespace Emadgh.BuildingGen.Editor
                     if (ruined)
                     {
                         float lateral = Range(random, -style.thicknessVariation * 0.35f, style.thicknessVariation * 0.35f);
-                        piece.transform.localPosition += piece.transform.right * lateral;
+                        piece.transform.localPosition += (piece.transform.localRotation * Vector3.right) * lateral;
                     }
 
                     chunkIndex++;
