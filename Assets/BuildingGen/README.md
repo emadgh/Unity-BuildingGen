@@ -2,7 +2,38 @@
 
 Editor-time procedural building generator for Unity, focused on traditional Yazd / central-Iran urban fabric.
 
-## v0.3 features
+## v0.5 — Facade Bay Planner
+
+- Opt-in reservation-based facade layout.
+- Unified `FacadeBayDefinition` metadata for 3ds Max / DCC prefabs.
+- Supported bay kinds: `Window`, `Door`, `Iwan`, `Arcade`, `Niche`, and intentional `Blank` bays.
+- One overlap map per wall instead of independent random systems.
+- Multi-floor reservations, so a two-floor iwan blocks conflicting windows above it.
+- Per-prefab width, height, sill, edge clearance, neighbor clearance and floor-span rules.
+- Per-prefab allowed facade surfaces: Front / Back / Side / Courtyard.
+- Weighted prefab selection and deterministic blank bays.
+- Configurable candidate density, fill chance, horizontal jitter and special-bay limit.
+- Optional compatibility with the legacy primary entrance so the existing hashti/bent-corridor route can remain active.
+- CSG cutters use the existing ProBuilder Boolean backend.
+- `Bake Copy` strips facade-bay cutter objects and metadata.
+- Demo command: `Tools > BuildingGen > Create Facade Bay v0.5 Demo`.
+
+See `FACADE_BAYS.md` for the production authoring contract.
+
+## v0.4 — WallSpline
+
+- Editable `WallSpline` component with local control points.
+- Polyline and Catmull-Rom paths.
+- Closed loops.
+- SceneView point editing and Shift + click point creation.
+- SimpleMud, RuinedMud and DecoratedMud wall styles.
+- Deterministic ruined-wall chunk variation and missing sections.
+- Weighted top/crown prefab scattering.
+- Bake-copy workflow and three sample wall styles.
+
+See `WALL_SPLINE.md` for wall authoring details.
+
+## v0.3 — Building Massing
 
 - Deterministic seed-based generation.
 - `Rectangle`, `LShape`, `UShape`, and `Courtyard` footprints.
@@ -28,25 +59,27 @@ Install ProBuilder from Package Manager. The current CSG backend uses ProBuilder
 
 `Edit > Preferences/Settings > ProBuilder > Experimental Features Enabled`
 
-Without CSG, massing and visible prefabs still generate, but opening/iwan cutters do not modify walls.
+Without CSG, massing and visible prefabs still generate, but opening/iwan/facade-bay cutters do not modify walls.
 
-## Demo
+## Demos
 
-Run:
+Legacy building demo:
 
 `Tools > BuildingGen > Create Simple Yazd Demo`
 
-Generated test assets are written under:
+WallSpline demo:
 
-`Assets/BuildingGen/Samples/Generated`
+`Tools > BuildingGen > Create Wall Spline Demo`
 
-The scene object `YazdBuilding_Demo` starts as a two-floor courtyard house and includes primitive arched door/window, recessed iwan, arcade bay, badgir, dome and barrel-vault samples plus a generated hashti/bent entrance route.
+Facade Bay v0.5 demo:
 
-## Opening prefab contract
+`Tools > BuildingGen > Create Facade Bay v0.5 Demo`
+
+## Facade Bay prefab contract
 
 ```text
 PF_Window_Arch_01
-├── OpeningDefinition
+├── FacadeBayDefinition
 ├── Visual
 │   └── imported 3ds Max art
 └── Cutter
@@ -55,11 +88,23 @@ PF_Window_Arch_01
 
 Authoring convention:
 
-- Pivot: bottom-center.
+- Pivot: bottom-center of the opening/bay.
 - `+Y`: up.
 - `+Z`: outward from facade.
 - Cutter must be closed/manifold and deeper than the maximum wall thickness.
 - Keep visual complexity separate from cutter complexity.
+- Use `Floor Span > 1` for iwans or other features that occupy multiple floors.
+
+## Legacy opening prefab contract
+
+```text
+PF_Window_Arch_01
+├── OpeningDefinition
+├── Visual
+└── Cutter
+```
+
+`OpeningDefinition` remains supported for the original opening workflow and the primary entrance compatibility path.
 
 ## Architectural module contract
 
@@ -72,27 +117,26 @@ PF_Iwan_01
 
 `YazdModuleDefinition` supports Iwan, Badgir, ArcadeBay, Dome, BarrelVault and generic module kinds. Facade modules use bottom-center / `+Z` outward orientation. Roof modules use bottom-center / `+Y` up.
 
-For an iwan recess, enable `Cut Host Surface`, assign `Cutter Root`, and enable `BuildingGenerator > Cut Iwan Recess`.
-
 ## Non-destructive generation
 
 `BuildingGenerator` remains the source of truth. Every Generate/Randomize pass deletes `__GeneratedBuilding` and rebuilds from source parameters and Seed. `Bake Copy` creates a detached accepted result and removes cutter/module metadata.
+
+`Facade Bay Planner` is opt-in. When enabled, legacy random windows, legacy iwan placement and legacy courtyard arcade placement are temporarily bypassed while the base building is generated, then the new reservation-based facade pass is applied.
 
 ## Current limitations
 
 - Boolean backend is still ProBuilder experimental CSG.
 - Hashti/corridor geometry is a rule/placement prototype made from primitives, not a production interior kit.
-- Arcade bays do not yet reserve the bay occupied by an iwan.
 - Wall height is still uniform across the whole building.
+- Facade Bay v0.5 currently targets straight wall segments produced by `BuildingGenerator`; WallSpline openings are a later step.
 - Sample assets are intentionally primitive placeholders.
-- v0.3 still needs compile/geometry validation inside the target Unity Editor version.
+- v0.5 still needs compile, CSG and SceneView validation inside the target Unity Editor version.
 
 ## Next targets
 
+- Advanced WallSpline: gate openings, pillars, buttresses, niches, end caps, broken profiles and terrain conforming.
 - Real 3ds Max Yazd asset set.
 - Modular hashti/corridor/interior connection kit.
-- Iwan/arcade bay zoning.
 - Stepped and multi-height massing.
 - Production domes, vaults and squinches.
-- Buttresses, niches, brick bands, aging/damage.
 - LOD/collider/lightmap bake stage.
