@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace Emadgh.BuildingGen.Editor
 {
@@ -28,9 +29,9 @@ namespace Emadgh.BuildingGen.Editor
             float neighborClearance,
             FacadeBayKind kind)
         {
-            int lastFloor = firstFloor + System.Math.Max(1, floorSpan) - 1;
+            int lastFloor = firstFloor + Mathf.Max(1, floorSpan) - 1;
             float half = width * 0.5f;
-            float padding = System.Math.Max(0f, neighborClearance);
+            float padding = Mathf.Max(0f, neighborClearance);
             float minX = centerX - half - padding;
             float maxX = centerX + half + padding;
 
