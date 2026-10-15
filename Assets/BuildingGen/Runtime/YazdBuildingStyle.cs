@@ -17,6 +17,9 @@ namespace Emadgh.BuildingGen
         [Header("Architectural Modules")]
         public List<GameObject> iwanPrefabs = new List<GameObject>();
         public List<GameObject> badgirPrefabs = new List<GameObject>();
+        public List<GameObject> arcadePrefabs = new List<GameObject>();
+        public List<GameObject> domePrefabs = new List<GameObject>();
+        public List<GameObject> vaultPrefabs = new List<GameObject>();
 
         [Header("Yazd Massing")]
         [Range(0f, 1f)] public float frontWindowChance = 1f;
@@ -25,6 +28,10 @@ namespace Emadgh.BuildingGen
         [Range(0f, 1f)] public float courtyardWindowChance = 0.85f;
         [Range(0f, 1f)] public float centeredDoorChance = 0.65f;
         [Range(0f, 1f)] public float iwanChance = 0.7f;
+
+        [Header("Courtyard Arcade")]
+        [Range(0f, 1f)] public float arcadeSideChance = 0.85f;
+        [Range(0f, 1f)] public float arcadeBayChance = 0.9f;
 
         [Header("Roof / Parapet")]
         public bool generateFlatRoof = true;

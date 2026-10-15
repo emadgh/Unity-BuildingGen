@@ -25,6 +25,7 @@ namespace Emadgh.BuildingGen.Editor
 
         public float Length { get { return Vector2.Distance(start, end); } }
         public Vector2 Midpoint { get { return (start + end) * 0.5f; } }
+        public Vector2 Tangent { get { return (end - start).normalized; } }
     }
 
     internal struct MassRect
@@ -37,6 +38,14 @@ namespace Emadgh.BuildingGen.Editor
             this.center = center;
             this.size = size;
         }
+    }
+
+    internal struct EntrancePlacement
+    {
+        public bool valid;
+        public WallSegment segment;
+        public GameObject wall;
+        public float horizontal;
     }
 
     internal static class BuildingBuilder
@@ -64,6 +73,7 @@ namespace Emadgh.BuildingGen.Editor
             Transform structureRoot = CreateGroup("Structure", root.transform);
             Transform openingsRoot = CreateGroup("Openings", root.transform);
             Transform modulesRoot = CreateGroup("YazdModules", root.transform);
+            Transform entranceRoot = CreateGroup("EntranceSequence", root.transform);
             Transform roofRoot = CreateGroup("Roof", root.transform);
 
             System.Random random = new System.Random(generator.seed);
@@ -76,6 +86,7 @@ namespace Emadgh.BuildingGen.Editor
 
             int entranceIndex = FindPrimaryEntranceSegment(segments);
             bool warnedAboutBoolean = false;
+            EntrancePlacement entrance = new EntrancePlacement();
 
             for (int i = 0; i < segments.Count; i++)
             {
@@ -87,14 +98,19 @@ namespace Emadgh.BuildingGen.Editor
                     walls[i],
                     openingsRoot,
                     i == entranceIndex && generator.generateGroundFloorDoor,
+                    ref entrance,
                     ref warnedAboutBoolean);
             }
+
+            GenerateIwan(generator, random, segments, walls, modulesRoot, ref warnedAboutBoolean);
 
             for (int i = 0; i < walls.Count; i++)
                 FinalizeWall(walls[i]);
 
             GenerateRoof(generator, roofRoot, masses, segments);
-            GenerateIwan(generator, random, segments, modulesRoot);
+            GenerateEntranceSequence(generator, random, entrance, entranceRoot);
+            GenerateCourtyardArcade(generator, random, segments, modulesRoot);
+            GenerateRoofForms(generator, random, masses, modulesRoot);
             GenerateBadgirs(generator, random, masses, modulesRoot);
 
             EditorUtility.SetDirty(generator);
@@ -136,7 +152,11 @@ namespace Emadgh.BuildingGen.Editor
 
             YazdModuleDefinition[] modules = baked.GetComponentsInChildren<YazdModuleDefinition>(true);
             foreach (YazdModuleDefinition module in modules)
+            {
+                if (module.cutterRoot != null)
+                    Object.DestroyImmediate(module.cutterRoot.gameObject);
                 Object.DestroyImmediate(module);
+            }
 
             return baked;
         }
@@ -296,7 +316,7 @@ namespace Emadgh.BuildingGen.Editor
         {
             Vector2 mid = segment.Midpoint;
             Vector3 position = new Vector3(mid.x, generator.TotalHeight * 0.5f, mid.y);
-            Vector3 forward = new Vector3(segment.outward.x, 0f, segment.outward.y);
+            Vector3 forward = ToVector3(segment.outward);
 
             GameObject wall = CreateCube(
                 segment.name,
@@ -341,6 +361,7 @@ namespace Emadgh.BuildingGen.Editor
             GameObject wall,
             Transform openingsRoot,
             bool allowDoor,
+            ref EntrancePlacement entrance,
             ref bool warnedAboutBoolean)
         {
             float facadeChance = GetFacadeChance(generator, style, segment.role);
@@ -370,6 +391,11 @@ namespace Emadgh.BuildingGen.Editor
                         random,
                         true,
                         ref warnedAboutBoolean);
+
+                    entrance.valid = true;
+                    entrance.segment = segment;
+                    entrance.wall = wall;
+                    entrance.horizontal = reservedDoorX;
                 }
             }
 
@@ -481,6 +507,17 @@ namespace Emadgh.BuildingGen.Editor
                 return;
             }
 
+            ApplyBoolean(generator, wall, cutter, ref warnedAboutBoolean, "opening prefab '" + prefab.name + "'");
+            cutter.SetActive(false);
+        }
+
+        private static void ApplyBoolean(
+            BuildingGenerator generator,
+            GameObject wall,
+            GameObject cutter,
+            ref bool warnedAboutBoolean,
+            string context)
+        {
             MeshRenderer cutterRenderer = cutter.GetComponent<MeshRenderer>();
             MeshRenderer wallRenderer = wall.GetComponent<MeshRenderer>();
             if (cutterRenderer != null && wallRenderer != null)
@@ -491,10 +528,8 @@ namespace Emadgh.BuildingGen.Editor
             if (!cut && !warnedAboutBoolean)
             {
                 warnedAboutBoolean = true;
-                Debug.LogWarning("BuildingGen: CSG subtraction is not active. Visual prefabs were placed but the walls were not cut. " + error, generator);
+                Debug.LogWarning("BuildingGen: CSG subtraction is not active for " + context + ". " + error, generator);
             }
-
-            cutter.SetActive(false);
         }
 
         private static void GenerateRoof(BuildingGenerator generator, Transform roofRoot, List<MassRect> masses, List<WallSegment> segments)
@@ -525,55 +560,294 @@ namespace Emadgh.BuildingGen.Editor
             {
                 WallSegment segment = segments[i];
                 Vector2 mid = segment.Midpoint;
-                Vector3 forward = new Vector3(segment.outward.x, 0f, segment.outward.y);
                 GameObject parapet = CreateCube(
                     "Parapet_" + i,
                     roofRoot,
                     new Vector3(mid.x, parapetY, mid.y),
                     new Vector3(segment.Length, style.parapetHeight, style.parapetThickness),
                     style.wallMaterial);
-                parapet.transform.localRotation = Quaternion.LookRotation(forward, Vector3.up);
+                parapet.transform.localRotation = Quaternion.LookRotation(ToVector3(segment.outward), Vector3.up);
             }
         }
 
-        private static void GenerateIwan(BuildingGenerator generator, System.Random random, List<WallSegment> segments, Transform modulesRoot)
+        private static void GenerateIwan(
+            BuildingGenerator generator,
+            System.Random random,
+            List<WallSegment> segments,
+            List<GameObject> walls,
+            Transform modulesRoot,
+            ref bool warnedAboutBoolean)
         {
             YazdBuildingStyle style = generator.style;
             if (!generator.generateIwan || style.iwanPrefabs.Count == 0 || Next01(random) > style.iwanChance)
                 return;
 
-            WallSegment? target = null;
+            int targetIndex = -1;
+            float longest = -1f;
             for (int i = 0; i < segments.Count; i++)
             {
                 WallSegment segment = segments[i];
-                if (segment.role == FacadeRole.Courtyard)
+                if (segment.role == FacadeRole.Courtyard && segment.Length > longest)
                 {
-                    if (!target.HasValue || segment.Length > target.Value.Length)
-                        target = segment;
+                    targetIndex = i;
+                    longest = segment.Length;
                 }
             }
 
-            if (!target.HasValue)
-            {
-                int index = FindPrimaryEntranceSegment(segments);
-                if (index >= 0)
-                    target = segments[index];
-            }
+            if (targetIndex < 0)
+                targetIndex = FindPrimaryEntranceSegment(segments);
 
-            if (!target.HasValue)
+            if (targetIndex < 0 || targetIndex >= walls.Count)
                 return;
 
             GameObject prefab = PickModulePrefab(style.iwanPrefabs, random);
             if (prefab == null)
                 return;
 
-            WallSegment wall = target.Value;
-            Vector2 mid = wall.Midpoint;
-            Vector3 outward = new Vector3(wall.outward.x, 0f, wall.outward.y);
+            WallSegment segmentTarget = segments[targetIndex];
+            Vector2 mid = segmentTarget.Midpoint;
+            Vector3 outward = ToVector3(segmentTarget.outward);
             GameObject instance = InstantiateModule(prefab, modulesRoot);
             instance.name = prefab.name;
             instance.transform.position = generator.transform.TransformPoint(new Vector3(mid.x, 0f, mid.y));
             instance.transform.rotation = generator.transform.rotation * Quaternion.LookRotation(outward, Vector3.up);
+
+            YazdModuleDefinition definition = instance.GetComponent<YazdModuleDefinition>();
+            if (definition == null || !generator.cutIwanRecess || !definition.cutHostSurface || definition.CutterObject == null)
+                return;
+
+            ApplyBoolean(generator, walls[targetIndex], definition.CutterObject, ref warnedAboutBoolean, "iwan prefab '" + prefab.name + "'");
+            definition.CutterObject.SetActive(false);
+        }
+
+        private static void GenerateEntranceSequence(
+            BuildingGenerator generator,
+            System.Random random,
+            EntrancePlacement entrance,
+            Transform parent)
+        {
+            if (!generator.generateHashtiAndCorridor || !entrance.valid)
+                return;
+
+            Material material = generator.style.wallMaterial;
+            Vector2 outward = entrance.segment.outward.normalized;
+            Vector2 inward = -outward;
+            Vector2 tangent = entrance.segment.Tangent;
+            Vector2 doorPoint = entrance.segment.Midpoint + tangent * entrance.horizontal;
+
+            float floorThickness = 0.10f;
+            float guideWallThickness = Mathf.Clamp(generator.wallThickness * 0.65f, 0.12f, 0.28f);
+            float guideWallHeight = Mathf.Min(generator.floorHeight * 0.75f, 2.45f);
+
+            Vector2 corridorCenter = doorPoint + inward * (generator.wallThickness * 0.5f + generator.entranceCorridorLength * 0.5f);
+            CreatePlanCube(
+                "EntranceCorridor_Floor",
+                parent,
+                corridorCenter,
+                floorThickness * 0.5f,
+                generator.entranceCorridorWidth,
+                floorThickness,
+                generator.entranceCorridorLength,
+                inward,
+                material);
+
+            Vector2 corridorRight = new Vector2(inward.y, -inward.x);
+            float sideOffset = generator.entranceCorridorWidth * 0.5f;
+            CreatePlanCube(
+                "EntranceCorridor_Wall_L",
+                parent,
+                corridorCenter - corridorRight * sideOffset,
+                guideWallHeight * 0.5f,
+                guideWallThickness,
+                guideWallHeight,
+                generator.entranceCorridorLength,
+                inward,
+                material);
+            CreatePlanCube(
+                "EntranceCorridor_Wall_R",
+                parent,
+                corridorCenter + corridorRight * sideOffset,
+                guideWallHeight * 0.5f,
+                guideWallThickness,
+                guideWallHeight,
+                generator.entranceCorridorLength,
+                inward,
+                material);
+
+            Vector2 hashtiCenter = doorPoint + inward * (generator.wallThickness * 0.5f + generator.entranceCorridorLength + generator.hashtiSize * 0.5f);
+            CreatePlanCube(
+                "Hashti_Floor",
+                parent,
+                hashtiCenter,
+                floorThickness * 0.5f,
+                generator.hashtiSize,
+                floorThickness,
+                generator.hashtiSize,
+                inward,
+                material);
+
+            float hashtiHalf = generator.hashtiSize * 0.5f;
+            CreatePlanCube(
+                "Hashti_Wall_L",
+                parent,
+                hashtiCenter - corridorRight * hashtiHalf,
+                guideWallHeight * 0.5f,
+                guideWallThickness,
+                guideWallHeight,
+                generator.hashtiSize,
+                inward,
+                material);
+            CreatePlanCube(
+                "Hashti_Wall_R",
+                parent,
+                hashtiCenter + corridorRight * hashtiHalf,
+                guideWallHeight * 0.5f,
+                guideWallThickness,
+                guideWallHeight,
+                generator.hashtiSize,
+                inward,
+                material);
+            CreatePlanCube(
+                "Hashti_Back",
+                parent,
+                hashtiCenter + inward * hashtiHalf,
+                guideWallHeight * 0.5f,
+                generator.hashtiSize,
+                guideWallHeight,
+                guideWallThickness,
+                inward,
+                material);
+
+            int turnSign;
+            if (generator.entranceTurn == EntranceTurnDirection.Left)
+                turnSign = -1;
+            else if (generator.entranceTurn == EntranceTurnDirection.Right)
+                turnSign = 1;
+            else
+                turnSign = random.Next(0, 2) == 0 ? -1 : 1;
+
+            Vector2 turnDirection = corridorRight * turnSign;
+            Vector2 turnCenter = hashtiCenter + turnDirection * (generator.hashtiSize * 0.5f + generator.entranceTurnLength * 0.5f);
+            CreatePlanCube(
+                "BentCorridor_Floor",
+                parent,
+                turnCenter,
+                floorThickness * 0.5f,
+                generator.entranceCorridorWidth,
+                floorThickness,
+                generator.entranceTurnLength,
+                turnDirection,
+                material);
+
+            Vector2 turnRight = new Vector2(turnDirection.y, -turnDirection.x);
+            CreatePlanCube(
+                "BentCorridor_Wall_L",
+                parent,
+                turnCenter - turnRight * sideOffset,
+                guideWallHeight * 0.5f,
+                guideWallThickness,
+                guideWallHeight,
+                generator.entranceTurnLength,
+                turnDirection,
+                material);
+            CreatePlanCube(
+                "BentCorridor_Wall_R",
+                parent,
+                turnCenter + turnRight * sideOffset,
+                guideWallHeight * 0.5f,
+                guideWallThickness,
+                guideWallHeight,
+                generator.entranceTurnLength,
+                turnDirection,
+                material);
+        }
+
+        private static void GenerateCourtyardArcade(
+            BuildingGenerator generator,
+            System.Random random,
+            List<WallSegment> segments,
+            Transform modulesRoot)
+        {
+            YazdBuildingStyle style = generator.style;
+            if (!generator.generateCourtyardArcade || generator.footprint != BuildingFootprint.Courtyard || style.arcadePrefabs.Count == 0)
+                return;
+
+            for (int i = 0; i < segments.Count; i++)
+            {
+                WallSegment segment = segments[i];
+                if (!segment.courtyard || Next01(random) > style.arcadeSideChance)
+                    continue;
+
+                int count = Mathf.Max(1, Mathf.FloorToInt(segment.Length / generator.arcadeBayWidth));
+                float step = segment.Length / count;
+                Vector2 tangent = segment.Tangent;
+
+                for (int bay = 0; bay < count; bay++)
+                {
+                    if (Next01(random) > style.arcadeBayChance)
+                        continue;
+
+                    GameObject prefab = PickModulePrefab(style.arcadePrefabs, random);
+                    if (prefab == null)
+                        continue;
+
+                    float offset = -segment.Length * 0.5f + step * (bay + 0.5f);
+                    Vector2 point = segment.Midpoint + tangent * offset + segment.outward * generator.arcadeDepth;
+                    GameObject instance = InstantiateModule(prefab, modulesRoot);
+                    instance.name = prefab.name + "_" + i + "_" + bay;
+                    instance.transform.position = generator.transform.TransformPoint(new Vector3(point.x, 0f, point.y));
+                    instance.transform.rotation = generator.transform.rotation * Quaternion.LookRotation(ToVector3(segment.outward), Vector3.up);
+                }
+            }
+        }
+
+        private static void GenerateRoofForms(
+            BuildingGenerator generator,
+            System.Random random,
+            List<MassRect> masses,
+            Transform modulesRoot)
+        {
+            YazdBuildingStyle style = generator.style;
+            if (!generator.generateRoofForms || generator.maxRoofForms <= 0 || masses.Count == 0)
+                return;
+
+            bool hasDome = style.domePrefabs.Count > 0;
+            bool hasVault = style.vaultPrefabs.Count > 0;
+            if (!hasDome && !hasVault)
+                return;
+
+            int placed = 0;
+            for (int i = 0; i < masses.Count && placed < generator.maxRoofForms; i++)
+            {
+                if (Next01(random) > generator.roofFormChance)
+                    continue;
+
+                bool chooseDome = hasDome && (!hasVault || Next01(random) < 0.5f);
+                List<GameObject> pool = chooseDome ? style.domePrefabs : style.vaultPrefabs;
+                GameObject prefab = PickModulePrefab(pool, random);
+                if (prefab == null)
+                    continue;
+
+                YazdModuleDefinition definition = prefab.GetComponent<YazdModuleDefinition>();
+                MassRect mass = masses[i];
+                float edge = definition != null ? definition.edgeClearance : 0.35f;
+                float nominalWidth = definition != null ? definition.nominalWidth : 1f;
+                float nominalDepth = definition != null ? definition.nominalDepth : 1f;
+                if (nominalWidth + edge * 2f > mass.size.x || nominalDepth + edge * 2f > mass.size.y)
+                    continue;
+
+                float maxX = Mathf.Max(0f, mass.size.x * 0.5f - nominalWidth * 0.5f - edge);
+                float maxZ = Mathf.Max(0f, mass.size.y * 0.5f - nominalDepth * 0.5f - edge);
+                float x = mass.center.x + Range(random, -maxX, maxX);
+                float z = mass.center.y + Range(random, -maxZ, maxZ);
+                float y = generator.TotalHeight + style.roofThickness;
+
+                GameObject instance = InstantiateModule(prefab, modulesRoot);
+                instance.name = prefab.name + "_" + placed;
+                instance.transform.position = generator.transform.TransformPoint(new Vector3(x, y, z));
+                instance.transform.rotation = generator.transform.rotation * Quaternion.Euler(0f, random.Next(0, 4) * 90f, 0f);
+                placed++;
+            }
         }
 
         private static void GenerateBadgirs(BuildingGenerator generator, System.Random random, List<MassRect> masses, Transform modulesRoot)
@@ -700,6 +974,27 @@ namespace Emadgh.BuildingGen.Editor
             return group.transform;
         }
 
+        private static GameObject CreatePlanCube(
+            string name,
+            Transform parent,
+            Vector2 center,
+            float y,
+            float width,
+            float height,
+            float depth,
+            Vector2 forward,
+            Material material)
+        {
+            GameObject go = CreateCube(
+                name,
+                parent,
+                new Vector3(center.x, y, center.y),
+                new Vector3(width, height, depth),
+                material);
+            go.transform.localRotation = Quaternion.LookRotation(ToVector3(forward), Vector3.up);
+            return go;
+        }
+
         private static GameObject CreateCube(
             string name,
             Transform parent,
@@ -738,6 +1033,11 @@ namespace Emadgh.BuildingGen.Editor
             if (collider == null)
                 collider = wall.AddComponent<MeshCollider>();
             collider.sharedMesh = filter.sharedMesh;
+        }
+
+        private static Vector3 ToVector3(Vector2 value)
+        {
+            return new Vector3(value.x, 0f, value.y);
         }
 
         private static float Next01(System.Random random)
