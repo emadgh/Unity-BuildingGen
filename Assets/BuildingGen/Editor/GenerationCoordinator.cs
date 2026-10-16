@@ -14,6 +14,19 @@ namespace Emadgh.BuildingGen.Editor
             if (generator == null)
                 return;
 
+            if (generator.footprint == BuildingFootprint.CustomSpline)
+            {
+                if (generator.geometryMode != BuildingGeometryMode.SolidMesh)
+                {
+                    Debug.LogWarning(
+                        "BuildingGen: CustomSpline is a solid-mesh footprint and ignores LegacySegmented mode.",
+                        generator);
+                }
+
+                CustomSplineSolidBuildingBuilder.Generate(generator);
+                return;
+            }
+
             if (generator.geometryMode == BuildingGeometryMode.SolidMesh)
             {
                 SolidBuildingBuilder.Generate(generator);
@@ -32,10 +45,16 @@ namespace Emadgh.BuildingGen.Editor
                 generator.generatedRoot != null
                 && generator.generatedRoot.Find("SolidBuildingMesh") != null;
 
-            if (generator.geometryMode == BuildingGeometryMode.SolidMesh || hasSolidBody)
+            if (generator.geometryMode == BuildingGeometryMode.SolidMesh
+                || generator.footprint == BuildingFootprint.CustomSpline
+                || hasSolidBody)
+            {
                 SolidBuildingBuilder.Clear(generator);
+            }
             else
+            {
                 BuildingBuilder.Clear(generator);
+            }
         }
 
         public static GameObject BakeCopy(BuildingGenerator generator)
@@ -47,8 +66,12 @@ namespace Emadgh.BuildingGen.Editor
                 generator.generatedRoot != null
                 && generator.generatedRoot.Find("SolidBuildingMesh") != null;
 
-            if (generator.geometryMode == BuildingGeometryMode.SolidMesh || hasSolidBody)
+            if (generator.geometryMode == BuildingGeometryMode.SolidMesh
+                || generator.footprint == BuildingFootprint.CustomSpline
+                || hasSolidBody)
+            {
                 return SolidBuildingBuilder.BakeCopy(generator);
+            }
 
             GameObject baked = BuildingBuilder.BakeCopy(generator);
             if (baked == null)

@@ -2,9 +2,11 @@
 
 Editor-time procedural architecture tools for Unity, focused on traditional Yazd / central-Iran urban fabric.
 
-## Current direction — v0.6
+## Current direction — v0.7
 
-The building body is **not modular wall geometry**. `BuildingGenerator` now defaults to `SolidMesh`, which produces one procedural `MeshFilter` / `MeshRenderer` body with real wall thickness.
+The building body is **not modular wall geometry**. `BuildingGenerator` defaults to `SolidMesh`, which produces one procedural `MeshFilter` / `MeshRenderer` body with real wall thickness.
+
+v0.7 adds a custom editable first-floor/base footprint alongside the existing Rectangle, L, U and Courtyard presets.
 
 ```text
 YazdBuilding
@@ -22,11 +24,15 @@ YazdBuilding
 ### Solid building support
 
 - deterministic Seed generation;
-- `Rectangle`, `LShape`, `UShape`, `Courtyard` footprints;
+- `Rectangle`, `LShape`, `UShape`, `Courtyard`, and `CustomSpline` footprints;
+- editable closed first-floor footprint handles in Scene View;
+- Polyline or smooth Catmull-Rom custom footprint interpolation;
+- preset-to-custom conversion for Rectangle/L/U starting shapes;
+- self-intersection and wall-offset validation for custom footprints;
 - hollow wall-shell construction with physical wall thickness;
 - one generated mesh for walls + roof;
 - separate wall and roof submeshes/materials;
-- open central courtyard with courtyard-facing wall shell and roof ring;
+- open central courtyard with courtyard-facing wall shell and roof ring in the dedicated Courtyard preset;
 - optional `MeshCollider` on the generated body;
 - metadata-only logical facade surfaces;
 - door/window visual prefabs with closed cutter meshes;
@@ -39,7 +45,7 @@ The older per-wall prototype is still available temporarily through:
 
 `Building Geometry Mode = LegacySegmented`
 
-It exists only as a comparison/fallback while the solid backend is tested with real production assets.
+It exists only as a comparison/fallback while the solid backend is tested with real production assets. `CustomSpline` always uses the SolidMesh path.
 
 ## Install into an existing Unity project
 
@@ -64,6 +70,16 @@ Run:
 `Tools > BuildingGen > Create Solid Yazd Demo`
 
 This creates/reuses the primitive test assets and regenerates `YazdBuilding_Demo` through the one-mesh backend.
+
+### Custom footprint demo
+
+Run:
+
+`Tools > BuildingGen > Create Custom Footprint Demo`
+
+Select `YazdBuilding_Demo` and edit `P0...Pn` directly in Scene View. Hold **Shift + Left Click** on the generator ground plane to append points.
+
+See `Assets/BuildingGen/CUSTOM_FOOTPRINT.md`.
 
 ### Facade bay demo
 
@@ -134,7 +150,7 @@ For reservation-planner elements use `FacadeBayDefinition` with the same pivot/o
 
 ## Solid mesh construction
 
-For a normal footprint:
+For a normal or custom footprint:
 
 ```text
 outer footprint
@@ -184,6 +200,19 @@ Concave U-shaped mass with `U Recess Depth`.
 
 Outer rectangular footprint plus a true open central courtyard. `Courtyard Width` and `Courtyard Depth` control the void.
 
+### Custom Spline
+
+Editable closed first-floor/base footprint. Use `Polyline` for architectural walls or `SmoothCatmullRom` for intentionally curved masses.
+
+Scene View controls:
+
+- drag `P0`, `P1`, ...;
+- Shift + Left Click to append;
+- Add Point / Remove Last / Reverse / Center;
+- optional live regeneration while moving handles.
+
+Rectangle/L/U presets can be converted to CustomSpline and then edited freely. The current v0.7 custom mode controls the outer perimeter; arbitrary custom inner courtyard/hole splines are deferred until the outer-loop workflow is validated in the target Unity project.
+
 ## Non-destructive workflow
 
 `BuildingGenerator` is the source of truth.
@@ -201,10 +230,12 @@ BuildingGenerator
     |       +-- SolidMesh        default
     |       +-- LegacySegmented  temporary fallback
     |
-    +-- footprint parameters
+    +-- Footprint
+    |       +-- Rectangle / L / U / Courtyard
+    |       +-- CustomSpline control points
     |
-    +-- SolidBuildingMeshBuilder
-    |       +-- footprint
+    +-- SolidBuildingMeshBuilder / CustomFootprintMeshBuilder
+    |       +-- footprint sampling
     |       +-- wall thickness
     |       +-- wall shell
     |       +-- roof / ceiling
@@ -231,14 +262,17 @@ This repository is still a drop-in `Assets/BuildingGen` toolset rather than a co
 The branch/repository receives static code and geometry-topology review, but final validation still requires the target Unity Editor to:
 
 - compile the scripts;
-- generate all four footprint types;
+- generate the preset and custom footprint types;
+- edit custom handles in Scene View;
 - run ProBuilder experimental CSG against real cutters;
 - inspect normals/UVs/colliders;
 - test Bake Copy and imported 3ds Max assets.
 
 ## Next production steps
 
+- custom courtyard / inner-hole spline support;
 - stepped / multi-height building massing while remaining one generated mesh;
+- per-floor footprint variation above the first-floor/base spline;
 - solid parapet and roof-edge geometry;
 - room/hashti/interior-plan generation instead of primitive legacy guides;
 - production Boolean backend evaluation;

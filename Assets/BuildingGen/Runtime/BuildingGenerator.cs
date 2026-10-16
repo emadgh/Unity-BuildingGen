@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Emadgh.BuildingGen
@@ -7,7 +8,14 @@ namespace Emadgh.BuildingGen
         Rectangle,
         LShape,
         UShape,
-        Courtyard
+        Courtyard,
+        CustomSpline
+    }
+
+    public enum FootprintSplineInterpolation
+    {
+        Polyline,
+        SmoothCatmullRom
     }
 
     public enum BuildingGeometryMode
@@ -48,6 +56,20 @@ namespace Emadgh.BuildingGen
         [Range(1, 5)] public int floors = 2;
         [Min(2f)] public float floorHeight = 3.1f;
         [Min(0.12f)] public float wallThickness = 0.35f;
+
+        [Header("Custom First-Floor Footprint")]
+        [Tooltip("Editable closed footprint used when Footprint = CustomSpline. Points are stored in the BuildingGenerator's local XZ plane.")]
+        public FootprintSplineInterpolation customFootprintInterpolation = FootprintSplineInterpolation.Polyline;
+        [Range(1, 16)] public int customFootprintSubdivisions = 5;
+        public List<Vector2> customFootprintPoints = new List<Vector2>
+        {
+            new Vector2(-5f, -4f),
+            new Vector2(5f, -4f),
+            new Vector2(5f, 4f),
+            new Vector2(-5f, 4f)
+        };
+        [Tooltip("Regenerate immediately while moving custom footprint handles in Scene View.")]
+        public bool liveCustomFootprintPreview = true;
 
         [Header("L / U Shape")]
         [Tooltip("Width of the solid side/rear wings used by L and U footprints.")]
@@ -144,6 +166,10 @@ namespace Emadgh.BuildingGen
                     uRecessDepth,
                     1.5f,
                     depth - wallThickness * 4f);
+
+            customFootprintSubdivisions = Mathf.Clamp(customFootprintSubdivisions, 1, 16);
+            if (customFootprintPoints == null)
+                customFootprintPoints = new List<Vector2>();
 
             float maxCourtyardWidth =
                 Mathf.Max(2f, width - wallThickness * 6f);
