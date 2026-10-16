@@ -50,7 +50,8 @@ namespace Emadgh.BuildingGen.Editor
                 if (GUILayout.Button("Custom Rectangle"))
                 {
                     Undo.RecordObject(generator, "Create custom rectangle footprint");
-                    generator.customFootprintPoints = CreateRectanglePoints(generator.width, generator.depth);
+                    generator.customFootprintPoints =
+                        CreateRectanglePoints(generator.width, generator.depth);
                     generator.footprint = BuildingFootprint.CustomSpline;
                     generator.geometryMode = BuildingGeometryMode.SolidMesh;
                     EditorUtility.SetDirty(generator);
@@ -84,15 +85,19 @@ namespace Emadgh.BuildingGen.Editor
             }
             else if (generator.footprint == BuildingFootprint.CustomSpline)
             {
-                if (CustomFootprintMeshBuilder.ValidateControlPolygon(generator, out string error))
+                if (CustomFootprintValidationUtility.ValidateForBuild(
+                        generator,
+                        out string error))
                 {
                     EditorGUILayout.HelpBox(
-                        "CustomSpline uses the closed Scene View footprint as the first-floor/base shape, then generates the complete house body as one solid mesh. Shift+Left Click appends a point.",
+                        "CustomSpline uses the closed Scene View footprint as the first-floor/base shape. Shift+Left Click inserts a control point into the nearest edge. Local +Z is the front/street direction.",
                         MessageType.Info);
                 }
                 else
                 {
-                    EditorGUILayout.HelpBox("Custom footprint is invalid: " + error, MessageType.Error);
+                    EditorGUILayout.HelpBox(
+                        "Custom footprint is invalid: " + error,
+                        MessageType.Error);
                 }
             }
 
@@ -171,15 +176,19 @@ namespace Emadgh.BuildingGen.Editor
                 return;
             }
 
+            DrawFrontDirection(generator);
             DrawCustomPath(generator);
             HandleCustomPoints(generator);
-            HandleShiftClickAppend(generator);
+            HandleShiftClickInsert(generator);
         }
 
-        private static void DrawCustomFootprintControls(BuildingGenerator generator)
+        private static void DrawCustomFootprintControls(
+            BuildingGenerator generator)
         {
             EditorGUILayout.Space(6f);
-            EditorGUILayout.LabelField("Custom Footprint Editing", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(
+                "Custom Footprint Editing",
+                EditorStyles.boldLabel);
 
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -193,9 +202,32 @@ namespace Emadgh.BuildingGen.Editor
                     CenterCustomPoints(generator);
             }
 
+            if (GUILayout.Button("Reset Custom Rectangle"))
+                ResetCustomRectangle(generator);
+
             EditorGUILayout.HelpBox(
-                "Scene View: drag P0, P1, ... to reshape the closed footprint. Hold Shift and left-click on the generator ground plane to append a point. Polyline is recommended for architectural walls; Smooth Catmull-Rom is available for organic footprints.",
+                "Scene View: drag P0, P1, ... to reshape the closed first-floor footprint. Shift+Left Click inserts a point into the nearest control edge. Add Point splits the longest edge. Polyline is recommended for architectural walls; Smooth Catmull-Rom is available for organic outlines.",
                 MessageType.None);
+        }
+
+        private static void DrawFrontDirection(BuildingGenerator generator)
+        {
+            Vector3 origin = generator.transform.position;
+            float length = HandleUtility.GetHandleSize(origin) * 1.15f;
+
+            Handles.color = new Color(0.2f, 0.8f, 1f, 1f);
+            Handles.ArrowHandleCap(
+                0,
+                origin,
+                Quaternion.LookRotation(
+                    generator.transform.forward,
+                    generator.transform.up),
+                length,
+                EventType.Repaint);
+
+            Handles.Label(
+                origin + generator.transform.forward * length,
+                "Front +Z");
         }
 
         private static void DrawCustomPath(BuildingGenerator generator)
@@ -237,8 +269,10 @@ namespace Emadgh.BuildingGen.Editor
                 Vector2 pa = generator.customFootprintPoints[i];
                 Vector2 pb = generator.customFootprintPoints[next];
                 Handles.DrawDottedLine(
-                    generator.transform.TransformPoint(new Vector3(pa.x, 0f, pa.y)),
-                    generator.transform.TransformPoint(new Vector3(pb.x, 0f, pb.y)),
+                    generator.transform.TransformPoint(
+                        new Vector3(pa.x, 0f, pa.y)),
+                    generator.transform.TransformPoint(
+                        new Vector3(pb.x, 0f, pb.y)),
                     4f);
             }
         }
@@ -254,17 +288,29 @@ namespace Emadgh.BuildingGen.Editor
                 float size = HandleUtility.GetHandleSize(world) * 0.085f;
 
                 Handles.color = Color.white;
-                Handles.SphereHandleCap(0, world, Quaternion.identity, size, EventType.Repaint);
-                Handles.Label(world + generator.transform.up * size * 1.5f, "P" + i);
+                Handles.SphereHandleCap(
+                    0,
+                    world,
+                    Quaternion.identity,
+                    size,
+                    EventType.Repaint);
+                Handles.Label(
+                    world + generator.transform.up * size * 1.5f,
+                    "P" + i);
 
                 EditorGUI.BeginChangeCheck();
-                Vector3 moved = Handles.PositionHandle(world, generator.transform.rotation);
+                Vector3 moved = Handles.PositionHandle(
+                    world,
+                    generator.transform.rotation);
                 if (EditorGUI.EndChangeCheck())
                 {
                     if (!changed)
-                        Undo.RecordObject(generator, "Move custom footprint point");
+                        Undo.RecordObject(
+                            generator,
+                            "Move custom footprint point");
 
-                    Vector3 movedLocal = generator.transform.InverseTransformPoint(moved);
+                    Vector3 movedLocal =
+                        generator.transform.InverseTransformPoint(moved);
                     generator.customFootprintPoints[i] =
                         new Vector2(movedLocal.x, movedLocal.z);
                     changed = true;
@@ -272,94 +318,155 @@ namespace Emadgh.BuildingGen.Editor
             }
 
             if (changed)
-            {
-                EditorUtility.SetDirty(generator);
-                if (generator.liveCustomFootprintPreview)
-                    GenerationCoordinator.Generate(generator);
-            }
+                CustomFootprintChanged(generator);
         }
 
-        private static void HandleShiftClickAppend(BuildingGenerator generator)
+        private static void HandleShiftClickInsert(BuildingGenerator generator)
         {
             Event current = Event.current;
             if (!current.shift || current.alt)
                 return;
 
             if (current.type == EventType.Layout)
-                HandleUtility.AddDefaultControl(GUIUtility.GetControlID(FocusType.Passive));
+            {
+                HandleUtility.AddDefaultControl(
+                    GUIUtility.GetControlID(FocusType.Passive));
+            }
 
             if (current.type != EventType.MouseDown || current.button != 0)
                 return;
 
             Ray ray = HandleUtility.GUIPointToWorldRay(current.mousePosition);
-            Plane plane = new Plane(generator.transform.up, generator.transform.position);
+            Plane plane = new Plane(
+                generator.transform.up,
+                generator.transform.position);
             if (!plane.Raycast(ray, out float enter))
                 return;
 
             Vector3 world = ray.GetPoint(enter);
             Vector3 local = generator.transform.InverseTransformPoint(world);
-            Undo.RecordObject(generator, "Append custom footprint point");
-            generator.customFootprintPoints.Add(new Vector2(local.x, local.z));
-            EditorUtility.SetDirty(generator);
+            Vector2 point = new Vector2(local.x, local.z);
 
-            if (generator.liveCustomFootprintPreview)
-                GenerationCoordinator.Generate(generator);
+            int segment = FindNearestControlSegment(
+                generator.customFootprintPoints,
+                point);
+
+            Undo.RecordObject(generator, "Insert custom footprint point");
+            generator.customFootprintPoints.Insert(segment + 1, point);
+            CustomFootprintChanged(generator);
             current.Use();
+        }
+
+        private static int FindNearestControlSegment(
+            List<Vector2> points,
+            Vector2 point)
+        {
+            if (points == null || points.Count < 2)
+                return 0;
+
+            int best = 0;
+            float bestDistance = float.MaxValue;
+
+            for (int i = 0; i < points.Count; i++)
+            {
+                Vector2 a = points[i];
+                Vector2 b = points[(i + 1) % points.Count];
+                float distance = DistancePointToSegment(point, a, b);
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    best = i;
+                }
+            }
+
+            return best;
+        }
+
+        private static float DistancePointToSegment(
+            Vector2 point,
+            Vector2 a,
+            Vector2 b)
+        {
+            Vector2 ab = b - a;
+            if (ab.sqrMagnitude < 0.000001f)
+                return Vector2.Distance(point, a);
+
+            float t = Mathf.Clamp01(
+                Vector2.Dot(point - a, ab) / ab.sqrMagnitude);
+            return Vector2.Distance(point, a + ab * t);
         }
 
         private static void AddCustomPoint(BuildingGenerator generator)
         {
-            Undo.RecordObject(generator, "Add custom footprint point");
             List<Vector2> points = generator.customFootprintPoints;
-            if (points.Count == 0)
+            if (points == null)
+                return;
+
+            if (points.Count < 2)
             {
-                points.Add(new Vector2(-2f, -2f));
-            }
-            else if (points.Count == 1)
-            {
-                points.Add(points[0] + Vector2.right * 4f);
-            }
-            else
-            {
-                Vector2 last = points[points.Count - 1];
-                Vector2 previous = points[points.Count - 2];
-                Vector2 direction = last - previous;
-                if (direction.sqrMagnitude < 0.01f)
-                    direction = Vector2.right;
-                points.Add(last + direction.normalized * 3f);
+                Undo.RecordObject(generator, "Add custom footprint point");
+                if (points.Count == 0)
+                    points.Add(new Vector2(-2f, -2f));
+                else
+                    points.Add(points[0] + Vector2.right * 4f);
+                CustomFootprintChanged(generator);
+                return;
             }
 
-            EditorUtility.SetDirty(generator);
-            if (generator.liveCustomFootprintPreview)
-                GenerationCoordinator.Generate(generator);
+            int longest = 0;
+            float longestLength = -1f;
+            for (int i = 0; i < points.Count; i++)
+            {
+                Vector2 a = points[i];
+                Vector2 b = points[(i + 1) % points.Count];
+                float length = (b - a).sqrMagnitude;
+                if (length > longestLength)
+                {
+                    longestLength = length;
+                    longest = i;
+                }
+            }
+
+            Vector2 midpoint =
+                (points[longest]
+                 + points[(longest + 1) % points.Count]) * 0.5f;
+
+            Undo.RecordObject(generator, "Add custom footprint point");
+            points.Insert(longest + 1, midpoint);
+            CustomFootprintChanged(generator);
         }
 
         private static void RemoveLastCustomPoint(BuildingGenerator generator)
         {
-            if (generator.customFootprintPoints.Count <= 3)
+            if (generator.customFootprintPoints == null
+                || generator.customFootprintPoints.Count <= 3)
+            {
                 return;
+            }
 
             Undo.RecordObject(generator, "Remove custom footprint point");
             generator.customFootprintPoints.RemoveAt(
                 generator.customFootprintPoints.Count - 1);
-            EditorUtility.SetDirty(generator);
-            if (generator.liveCustomFootprintPreview)
-                GenerationCoordinator.Generate(generator);
+            CustomFootprintChanged(generator);
         }
 
         private static void ReverseCustomPoints(BuildingGenerator generator)
         {
+            if (generator.customFootprintPoints == null)
+                return;
+
             Undo.RecordObject(generator, "Reverse custom footprint");
             generator.customFootprintPoints.Reverse();
-            EditorUtility.SetDirty(generator);
-            if (generator.liveCustomFootprintPreview)
-                GenerationCoordinator.Generate(generator);
+            CustomFootprintChanged(generator);
         }
 
         private static void CenterCustomPoints(BuildingGenerator generator)
         {
-            if (generator.customFootprintPoints.Count == 0)
+            if (generator.customFootprintPoints == null
+                || generator.customFootprintPoints.Count == 0)
+            {
                 return;
+            }
 
             Undo.RecordObject(generator, "Center custom footprint");
             Vector2 center = Vector2.zero;
@@ -370,9 +477,25 @@ namespace Emadgh.BuildingGen.Editor
             for (int i = 0; i < generator.customFootprintPoints.Count; i++)
                 generator.customFootprintPoints[i] -= center;
 
+            CustomFootprintChanged(generator);
+        }
+
+        private static void ResetCustomRectangle(BuildingGenerator generator)
+        {
+            Undo.RecordObject(generator, "Reset custom footprint rectangle");
+            generator.customFootprintPoints =
+                CreateRectanglePoints(generator.width, generator.depth);
+            generator.customFootprintInterpolation =
+                FootprintSplineInterpolation.Polyline;
+            CustomFootprintChanged(generator);
+        }
+
+        private static void CustomFootprintChanged(BuildingGenerator generator)
+        {
             EditorUtility.SetDirty(generator);
             if (generator.liveCustomFootprintPreview)
                 GenerationCoordinator.Generate(generator);
+            SceneView.RepaintAll();
         }
 
         private static void SetFootprint(
@@ -387,9 +510,13 @@ namespace Emadgh.BuildingGen.Editor
                 generator.width = Mathf.Max(generator.width, 12f);
                 generator.depth = Mathf.Max(generator.depth, 10f);
                 generator.courtyardWidth =
-                    Mathf.Min(generator.courtyardWidth, generator.width * 0.5f);
+                    Mathf.Min(
+                        generator.courtyardWidth,
+                        generator.width * 0.5f);
                 generator.courtyardDepth =
-                    Mathf.Min(generator.courtyardDepth, generator.depth * 0.5f);
+                    Mathf.Min(
+                        generator.courtyardDepth,
+                        generator.depth * 0.5f);
                 generator.generateCourtyardOpenings = true;
             }
             else if (footprint == BuildingFootprint.UShape)
@@ -403,7 +530,8 @@ namespace Emadgh.BuildingGen.Editor
             GenerationCoordinator.Generate(generator);
         }
 
-        private static void ConvertCurrentPresetToCustom(BuildingGenerator generator)
+        private static void ConvertCurrentPresetToCustom(
+            BuildingGenerator generator)
         {
             Undo.RecordObject(generator, "Convert preset to custom footprint");
 
@@ -419,7 +547,9 @@ namespace Emadgh.BuildingGen.Editor
                         break;
                     default:
                         generator.customFootprintPoints =
-                            CreateRectanglePoints(generator.width, generator.depth);
+                            CreateRectanglePoints(
+                                generator.width,
+                                generator.depth);
                         break;
                 }
             }
@@ -430,7 +560,9 @@ namespace Emadgh.BuildingGen.Editor
             GenerationCoordinator.Generate(generator);
         }
 
-        private static List<Vector2> CreateRectanglePoints(float width, float depth)
+        private static List<Vector2> CreateRectanglePoints(
+            float width,
+            float depth)
         {
             float hw = width * 0.5f;
             float hd = depth * 0.5f;
@@ -443,7 +575,8 @@ namespace Emadgh.BuildingGen.Editor
             };
         }
 
-        private static List<Vector2> CreateLPoints(BuildingGenerator generator)
+        private static List<Vector2> CreateLPoints(
+            BuildingGenerator generator)
         {
             float hw = generator.width * 0.5f;
             float hd = generator.depth * 0.5f;
@@ -463,7 +596,8 @@ namespace Emadgh.BuildingGen.Editor
             };
         }
 
-        private static List<Vector2> CreateUPoints(BuildingGenerator generator)
+        private static List<Vector2> CreateUPoints(
+            BuildingGenerator generator)
         {
             float hw = generator.width * 0.5f;
             float hd = generator.depth * 0.5f;
@@ -490,7 +624,8 @@ namespace Emadgh.BuildingGen.Editor
             };
         }
 
-        private static void ApplyTraditionalYazdPreset(BuildingGenerator generator)
+        private static void ApplyTraditionalYazdPreset(
+            BuildingGenerator generator)
         {
             Undo.RecordObject(generator, "Apply traditional Yazd preset");
             generator.geometryMode = BuildingGeometryMode.SolidMesh;

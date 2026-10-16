@@ -23,6 +23,16 @@ namespace Emadgh.BuildingGen.Editor
                         generator);
                 }
 
+                if (!CustomFootprintValidationUtility.ValidateForBuild(
+                        generator,
+                        out string validationError))
+                {
+                    Debug.LogError(
+                        "BuildingGen custom footprint: " + validationError,
+                        generator);
+                    return;
+                }
+
                 CustomSplineSolidBuildingBuilder.Generate(generator);
                 return;
             }

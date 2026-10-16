@@ -77,7 +77,7 @@ Run:
 
 `Tools > BuildingGen > Create Custom Footprint Demo`
 
-Select `YazdBuilding_Demo` and edit `P0...Pn` directly in Scene View. Hold **Shift + Left Click** on the generator ground plane to append points.
+Select `YazdBuilding_Demo` and edit `P0...Pn` directly in Scene View. Hold **Shift + Left Click** on the generator ground plane to insert a point into the nearest control edge. The cyan `Front +Z` guide shows which direction is treated as the street/front facade.
 
 See `Assets/BuildingGen/CUSTOM_FOOTPRINT.md`.
 
@@ -207,9 +207,13 @@ Editable closed first-floor/base footprint. Use `Polyline` for architectural wal
 Scene View controls:
 
 - drag `P0`, `P1`, ...;
-- Shift + Left Click to append;
-- Add Point / Remove Last / Reverse / Center;
+- Shift + Left Click to insert a point into the nearest edge;
+- Add Point splits the longest edge;
+- Remove Last / Reverse / Center / Reset Custom Rectangle;
+- cyan `Front +Z` direction guide;
 - optional live regeneration while moving handles.
+
+Generation validates both the authored outer loop and the inward wall-thickness loop. Tight concave corners that make the inner wall self-intersect or leave the footprint are rejected before the generated building is replaced.
 
 Rectangle/L/U presets can be converted to CustomSpline and then edited freely. The current v0.7 custom mode controls the outer perimeter; arbitrary custom inner courtyard/hole splines are deferred until the outer-loop workflow is validated in the target Unity project.
 
