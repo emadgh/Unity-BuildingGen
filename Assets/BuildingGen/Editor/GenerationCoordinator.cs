@@ -16,7 +16,10 @@ namespace Emadgh.BuildingGen.Editor
 
             if (generator.geometryMode == BuildingGeometryMode.SolidMesh)
             {
-                SolidBuildingBuilder.Generate(generator);
+                if (generator.footprint == BuildingFootprint.CustomSpline)
+                    CustomSplineSolidBuildingBuilder.Generate(generator);
+                else
+                    SolidBuildingBuilder.Generate(generator);
                 return;
             }
 
