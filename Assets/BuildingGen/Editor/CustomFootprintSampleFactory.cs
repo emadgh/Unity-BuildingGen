@@ -52,7 +52,7 @@ namespace Emadgh.BuildingGen.Editor
             SceneView.lastActiveSceneView?.FrameSelected();
 
             Debug.Log(
-                "BuildingGen v0.7: custom first-floor footprint demo created. Select YazdBuilding_Demo and drag P0...Pn in Scene View; Shift+Left Click appends points.",
+                "BuildingGen v0.7: custom first-floor footprint demo created. Drag P0...Pn in Scene View; Shift+Left Click inserts into the nearest edge. The cyan Front +Z arrow shows the street/front direction.",
                 go);
         }
     }
